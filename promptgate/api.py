@@ -51,6 +51,11 @@ class _ChainRunIn(BaseModel):
     max_retries_per_step: int = 3
 
 
+class _KeyIn(BaseModel):
+    name: str
+    value: str
+
+
 def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
     """Create and return a configured FastAPI application.
 
@@ -125,10 +130,21 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
     @app.post("/api/run")
     def run_prompt(body: _RunIn) -> dict:
         """Compile, call LLM, validate, retry — return result."""
+        import os
         try:
             from promptgate.runner import run as pg_run
         except ImportError as exc:
             raise HTTPException(501, "litellm not installed: pip install pgate[litellm]") from exc
+        try:
+            from promptgate.keystore import get_key, list_keys
+            for name in list_keys():
+                env_name = name.upper()
+                if env_name not in os.environ:
+                    val = get_key(name)
+                    if val:
+                        os.environ[env_name] = val
+        except Exception:
+            pass
         try:
             result = pg_run(
                 body.prompt_id, body.payload, body.model_id,
@@ -136,6 +152,8 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
             )
         except KeyError as exc:
             raise HTTPException(404, str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(422, f"LLM error: {exc}") from exc
         return {"ok": result.ok, "data": result.data, "raw_output": result.raw_output, "attempts": result.attempts}
 
     # ── validate ──────────────────────────────────────────────────────────────
@@ -212,6 +230,40 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
             }
         except Exception:
             return {"name": "default", "default_model": "", "api_base": ""}
+
+    # ── keys ──────────────────────────────────────────────────────────────────
+
+    @app.get("/api/keys")
+    def list_keys_endpoint() -> list[str]:
+        """List stored API key names (values are never returned)."""
+        try:
+            from promptgate.keystore import list_keys
+            return list_keys()
+        except Exception:
+            return []
+
+    @app.post("/api/keys", status_code=201)
+    def set_key_endpoint(body: _KeyIn) -> dict:
+        """Store or update an API key (encrypted on disk)."""
+        try:
+            from promptgate.keystore import set_key
+        except ImportError as exc:
+            raise HTTPException(501, "cryptography not installed: pip install pgate[crypto]") from exc
+        if not body.name or not body.value:
+            raise HTTPException(422, "name and value required")
+        set_key(body.name, body.value)
+        return {"ok": True, "name": body.name}
+
+    @app.delete("/api/keys/{name}")
+    def delete_key_endpoint(name: str) -> dict:
+        """Delete a stored API key."""
+        try:
+            from promptgate.keystore import delete_key
+        except ImportError as exc:
+            raise HTTPException(501, "cryptography not installed: pip install pgate[crypto]") from exc
+        if not delete_key(name):
+            raise HTTPException(404, f"Key '{name}' not found")
+        return {"ok": True}
 
     # ── static UI ─────────────────────────────────────────────────────────────
 

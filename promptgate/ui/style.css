@@ -493,6 +493,11 @@ p.loading { color: var(--text-dim); font-size: 13px; }
 .empty p { font-size: 13px; }
 
 /* ── toast ── */
+/* ── settings ── */
+.settings-section { margin-bottom: 2rem; }
+.settings-section h2 { font-size: 14px; font-weight: 600; color: var(--amber); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.settings-add-key { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-top: 0.5rem; }
+
 #toast {
   position: fixed;
   bottom: 1.25rem;

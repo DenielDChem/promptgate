@@ -58,6 +58,7 @@ const routes = [
   { re: /^#\/prompts$/, page: () => promptsPage() },
   { re: /^#\/chains\/(.+)$/, page: (m) => chainDetailPage(m[1]) },
   { re: /^#\/chains$/, page: () => chainsPage() },
+  { re: /^#\/settings$/, page: () => settingsPage() },
   { re: /^(#\/?)?$/, page: () => promptsPage() },
 ];
 
@@ -504,6 +505,91 @@ ${chain.description ? `<p style="color:var(--text-2);margin-bottom:1rem;font-siz
       document.getElementById("chain-run-btn").disabled = false;
     }
   });
+}
+
+// ── settings page ─────────────────────────────────────────────────────────────
+
+const KNOWN_KEYS = [
+  "OPENAI_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "GROQ_API_KEY",
+  "MISTRAL_API_KEY",
+  "COHERE_API_KEY",
+  "TOGETHER_API_KEY",
+  "DEEPSEEK_API_KEY",
+  "GEMINI_API_KEY",
+];
+
+async function settingsPage() {
+  render(`<h1>Settings</h1>
+<section class="settings-section">
+  <h2>API Keys</h2>
+  <p class="field-hint" style="margin-bottom:1rem">Keys are stored encrypted on disk (Fernet AES-128). Values are write-only — never displayed after saving.</p>
+  <div id="keys-list"><span style="color:var(--text-dim)">Loading…</span></div>
+  <div class="settings-add-key">
+    <datalist id="known-keys">${KNOWN_KEYS.map(k => `<option value="${k}">`).join("")}</datalist>
+    <div class="field-row" style="flex:1;min-width:180px">
+      <label>Key name</label>
+      <input id="key-name" list="known-keys" placeholder="OPENAI_API_KEY">
+    </div>
+    <div class="field-row" style="flex:2;min-width:220px">
+      <label>Value</label>
+      <input id="key-value" type="password" placeholder="sk-…" autocomplete="new-password">
+    </div>
+    <button class="btn primary" style="align-self:flex-end" onclick="addKey()">Save Key</button>
+  </div>
+</section>`);
+
+  await refreshKeysList();
+}
+
+async function refreshKeysList() {
+  const el = document.getElementById("keys-list");
+  if (!el) return;
+  try {
+    const keys = await api.get("/api/keys");
+    if (!keys.length) {
+      el.innerHTML = `<p style="color:var(--text-dim);font-size:13px">No keys stored yet.</p>`;
+      return;
+    }
+    el.innerHTML = `<table class="prompt-table" style="margin-bottom:1rem">
+      <thead><tr><th>Name</th><th>Value</th><th></th></tr></thead>
+      <tbody>${keys.map(k => `
+        <tr>
+          <td><span class="prompt-id">${escHtml(k)}</span></td>
+          <td style="color:var(--text-dim);font-size:12px">••••••••</td>
+          <td><div class="actions">
+            <button class="btn btn-sm danger" onclick="deleteKey('${escHtml(k)}')">Delete</button>
+          </div></td>
+        </tr>`).join("")}
+      </tbody>
+    </table>`;
+  } catch (e) {
+    el.innerHTML = `<p style="color:var(--err)">${escHtml(e.message)}</p>`;
+  }
+}
+
+async function addKey() {
+  const name = document.getElementById("key-name").value.trim();
+  const value = document.getElementById("key-value").value.trim();
+  if (!name) { toast("Key name required", "err"); return; }
+  if (!value) { toast("Value required", "err"); return; }
+  try {
+    await api.post("/api/keys", {name, value});
+    toast(`Saved ${name}`);
+    document.getElementById("key-name").value = "";
+    document.getElementById("key-value").value = "";
+    await refreshKeysList();
+  } catch (e) { toast(e.message, "err"); }
+}
+
+async function deleteKey(name) {
+  if (!confirm(`Delete key "${name}"?`)) return;
+  try {
+    await api.del(`/api/keys/${encodeURIComponent(name)}`);
+    toast(`Deleted ${name}`);
+    await refreshKeysList();
+  } catch (e) { toast(e.message, "err"); }
 }
 
 // ── boot ──────────────────────────────────────────────────────────────────────
