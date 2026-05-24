@@ -79,7 +79,7 @@ class SQLiteBackend:
                 );
 
                 CREATE VIRTUAL TABLE IF NOT EXISTS prompts_fts USING fts5(
-                    id UNINDEXED,
+                    id,
                     name,
                     tags,
                     description,
@@ -106,7 +106,33 @@ class SQLiteBackend:
                 END;
                 """
             )
+        self._migrate_fts_if_needed()
         logger.debug("SQLiteBackend initialized at {}", self._path)
+
+    def _migrate_fts_if_needed(self) -> None:
+        """Rebuild FTS index if id column was previously UNINDEXED."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE name='prompts_fts'"
+            ).fetchone()
+            if row and "id UNINDEXED" in (row["sql"] or ""):
+                logger.info("Migrating FTS index: rebuilding with id indexed")
+                conn.executescript(
+                    """
+                    DROP TABLE IF EXISTS prompts_fts;
+                    CREATE VIRTUAL TABLE prompts_fts USING fts5(
+                        id,
+                        name,
+                        tags,
+                        description,
+                        template,
+                        content='prompts',
+                        content_rowid='rowid'
+                    );
+                    INSERT INTO prompts_fts(rowid, id, name, tags, description, template)
+                    SELECT rowid, id, name, tags, description, template FROM prompts;
+                    """
+                )
 
     def upsert(self, prompt: PromptConfig) -> None:
         """Insert or replace a prompt.
