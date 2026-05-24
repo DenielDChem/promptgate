@@ -337,6 +337,97 @@ def models_show(model_id: str) -> None:
         click.echo(f"  reasoning_budget_tokens: {caps.reasoning_budget_tokens:,}")
 
 
+@main.command("watch")
+@click.argument("directory", default="prompts", type=click.Path())
+@click.pass_context
+def watch_cmd(ctx: click.Context, directory: str) -> None:
+    """Watch a directory for YAML changes and auto-upsert prompts.
+
+    Blocks until Ctrl+C. Uses OS-native file events (inotify on Linux).
+
+    Examples:
+
+        pgate watch
+
+        pgate watch ./my_prompts
+    """
+    from promptgate.watcher import watch as pg_watch
+    try:
+        pg_watch(directory, db_path=ctx.obj["db"])
+    except FileNotFoundError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+@main.group("keys")
+def keys_group() -> None:
+    """Manage encrypted API keys stored in ~/.promptgate/keys.enc."""
+
+
+@keys_group.command("set")
+@click.argument("name")
+@click.argument("value")
+def keys_set(name: str, value: str) -> None:
+    """Store an API key encrypted at rest.
+
+    Examples:
+
+        pgate keys set openai sk-...
+
+        pgate keys set anthropic sk-ant-...
+    """
+    from promptgate.keystore import set_key
+    set_key(name, value)
+    click.echo(f"Stored '{name}'.")
+
+
+@keys_group.command("get")
+@click.argument("name")
+def keys_get(name: str) -> None:
+    """Retrieve and print a stored API key.
+
+    Examples:
+
+        pgate keys get openai
+    """
+    from promptgate.keystore import get_key
+    value = get_key(name)
+    if value is None:
+        raise click.ClickException(f"Key '{name}' not found.")
+    click.echo(value)
+
+
+@keys_group.command("list")
+def keys_list() -> None:
+    """List stored key names (values are never shown).
+
+    Examples:
+
+        pgate keys list
+    """
+    from promptgate.keystore import list_keys
+    names = list_keys()
+    if not names:
+        click.echo("No keys stored.")
+        return
+    for name in names:
+        click.echo(f"  {name}")
+
+
+@keys_group.command("rm")
+@click.argument("name")
+def keys_rm(name: str) -> None:
+    """Delete a stored API key.
+
+    Examples:
+
+        pgate keys rm openai
+    """
+    from promptgate.keystore import delete_key
+    if not delete_key(name):
+        raise click.ClickException(f"Key '{name}' not found.")
+    click.echo(f"Removed '{name}'.")
+
+
 @main.command("mcp")
 @click.option("--stdio", "transport", flag_value="stdio", default=True, help="Run MCP over stdio.")
 @click.pass_context

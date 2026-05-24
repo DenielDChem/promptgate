@@ -109,3 +109,91 @@ def test_validate_with_prose_before_json(contract, schema):
     result = validate_output(output, contract, schema)
     assert result.ok is True
     assert result.data["result"] == "great work"
+
+
+# --- rich format validation ---
+
+@pytest.fixture
+def email_schema():
+    return {
+        "type": "object",
+        "properties": {"email": {"type": "string", "format": "email"}},
+        "required": ["email"],
+    }
+
+
+@pytest.fixture
+def uri_schema():
+    return {
+        "type": "object",
+        "properties": {"url": {"type": "string", "format": "url"}},
+        "required": ["url"],
+    }
+
+
+@pytest.fixture
+def date_schema():
+    return {
+        "type": "object",
+        "properties": {"date": {"type": "string", "format": "date"}},
+        "required": ["date"],
+    }
+
+
+def test_format_email_valid(contract, email_schema):
+    """Valid email passes format check."""
+    result = validate_output('{"email": "user@example.com"}', contract, email_schema)
+    assert result.ok is True
+
+
+def test_format_email_invalid(contract, email_schema):
+    """Invalid email fails format check and returns retry_instruction."""
+    result = validate_output('{"email": "not-an-email"}', contract, email_schema)
+    assert result.ok is False
+    assert result.retry_instruction is not None
+
+
+def test_format_uri_valid(contract, uri_schema):
+    """Valid URI passes format check."""
+    result = validate_output('{"url": "https://example.com/path"}', contract, uri_schema)
+    assert result.ok is True
+
+
+def test_format_uri_invalid(contract, uri_schema):
+    """Invalid URI fails format check."""
+    result = validate_output('{"url": "not a url"}', contract, uri_schema)
+    assert result.ok is False
+
+
+def test_format_date_valid(contract, date_schema):
+    """Valid ISO date passes format check."""
+    result = validate_output('{"date": "2024-01-15"}', contract, date_schema)
+    assert result.ok is True
+
+
+def test_format_date_invalid(contract, date_schema):
+    """Invalid date string fails format check."""
+    result = validate_output('{"date": "15/01/2024"}', contract, date_schema)
+    assert result.ok is False
+
+
+def test_enum_validation(contract):
+    """Enum constraint enforced without FormatChecker."""
+    schema = {
+        "type": "object",
+        "properties": {"color": {"type": "string", "enum": ["red", "green", "blue"]}},
+        "required": ["color"],
+    }
+    assert validate_output('{"color": "red"}', contract, schema).ok is True
+    assert validate_output('{"color": "purple"}', contract, schema).ok is False
+
+
+def test_pattern_validation(contract):
+    """Regex pattern constraint enforced."""
+    schema = {
+        "type": "object",
+        "properties": {"code": {"type": "string", "pattern": "^[A-Z]{3}-\\d{4}$"}},
+        "required": ["code"],
+    }
+    assert validate_output('{"code": "ABC-1234"}', contract, schema).ok is True
+    assert validate_output('{"code": "abc-1234"}', contract, schema).ok is False

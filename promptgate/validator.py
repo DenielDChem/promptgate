@@ -2,9 +2,22 @@
 from __future__ import annotations
 
 import json
+import urllib.parse
 
 import jsonschema
-from jsonschema import ValidationError
+from jsonschema import FormatChecker, ValidationError
+from jsonschema.exceptions import FormatError
+
+_FORMAT_CHECKER = FormatChecker()
+
+
+@_FORMAT_CHECKER.checks("url", raises=ValueError)
+def _check_url(value: str) -> bool:
+    parsed = urllib.parse.urlparse(value)
+    if not (parsed.scheme and parsed.netloc):
+        raise ValueError(f"{value!r} is not a valid URL")
+    return True
+
 
 from promptgate.models import CompiledContract, ValidationResult
 
@@ -95,8 +108,11 @@ def validate_output(llm_output: str, contract: CompiledContract, schema: dict) -
         )
 
     try:
-        jsonschema.validate(instance=data, schema=schema)
+        jsonschema.validate(instance=data, schema=schema, format_checker=_FORMAT_CHECKER)
         return ValidationResult(ok=True, data=data)
+    except FormatError as exc:
+        retry = contract.retry_template.format(field="<format>", error=str(exc))
+        return ValidationResult(ok=False, retry_instruction=retry)
     except ValidationError as exc:
         field = ".".join(str(p) for p in exc.absolute_path) or exc.validator_value
         retry = contract.retry_template.format(field=field, error=exc.message)

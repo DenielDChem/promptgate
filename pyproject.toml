@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pgate"
-version = "0.1.2"
+version = "0.2.0"
 description = "PGate — Prompt ORM for LLM agents. Store, compile, validate and cache prompt contracts locally."
 readme = "README.md"
 license = { text = "MIT" }
@@ -26,6 +26,9 @@ dev = [
 ]
 crypto = [
     "cryptography>=41.0",
+]
+watch = [
+    "watchdog>=3.0",
 ]
 litellm = [
     "litellm>=1.0",
