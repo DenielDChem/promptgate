@@ -2,6 +2,8 @@
 
 const BASE = "";
 
+let _editorState = {existing: null, id: null};
+
 // ── API client ────────────────────────────────────────────────────────────────
 
 const api = {
@@ -108,12 +110,12 @@ async function promptsPage() {
       return;
     }
     document.getElementById("prompt-rows").innerHTML = prompts.map(p => `
-      <tr>
-        <td><a class="prompt-id" href="#/prompts/${escHtml(p.id)}">${escHtml(p.id)}</a></td>
+      <tr style="cursor:pointer" onclick="navigate('#/prompts/${escHtml(p.id)}')">
+        <td><span class="prompt-id">${escHtml(p.id)}</span></td>
         <td style="color:var(--text-2)">${escHtml(p.name || "—")}</td>
         <td>${(p.tags || []).map(t => `<span class="tag">${escHtml(t)}</span>`).join("")}</td>
         <td style="font-family:var(--mono);font-size:12px;color:var(--text-dim)">${escHtml(p.model || "—")}</td>
-        <td><div class="actions">
+        <td onclick="event.stopPropagation()"><div class="actions">
           <a class="btn btn-sm secondary" href="#/prompts/${escHtml(p.id)}/run">Run</a>
           <button class="btn btn-sm danger" onclick="deletePrompt('${escHtml(p.id)}')">Delete</button>
         </div></td>
@@ -158,6 +160,7 @@ async function editorPage(id) {
   <div>
     <div class="pane-header"><h2>Compiled Contract</h2></div>
     <pre class="compile-preview" id="compile-out">— press Compile —</pre>
+    <p style="color:var(--text-dim);font-size:11px;margin-top:.5rem">Preview only — the model receives this compiled form when you Run.</p>
   </div>
 </div>`);
 
@@ -168,11 +171,13 @@ async function editorPage(id) {
     } catch (e) { toast(e.message, "err"); }
   }
 
+  _editorState = {existing, id};
   const hasSchema = existing?.schema_ && Object.keys(existing.schema_).length > 0;
-  setMode(hasSchema ? "json" : "simple", existing, id);
+  setMode(hasSchema ? "json" : "simple");
 }
 
-function setMode(mode, existing, id) {
+function setMode(mode) {
+  const {existing, id} = _editorState;
   document.querySelectorAll(".mode-toggle button").forEach(b => b.classList.remove("active"));
   document.getElementById(`mode-${mode}`).classList.add("active");
 
@@ -241,7 +246,15 @@ async function saveSimple() {
   try {
     await api.post("/api/prompts", obj);
     toast("Saved " + obj.id);
-    navigate("#/prompts");
+    if (!_editorState.id) {
+      _editorState.id = obj.id;
+      _editorState.existing = obj;
+      const runLink = document.querySelector("#editor-left a.btn");
+      if (!runLink) {
+        const btnRow = document.querySelector("#editor-left div[style]");
+        if (btnRow) btnRow.insertAdjacentHTML("beforeend", `<a class="btn secondary" href="#/prompts/${escHtml(obj.id)}/run">Run</a>`);
+      }
+    }
   } catch (e) { toast(e.message, "err"); }
 }
 
@@ -263,7 +276,10 @@ async function saveJson() {
     const obj = JSON.parse(raw);
     await api.post("/api/prompts", obj);
     toast("Saved " + (obj.id || "prompt"));
-    navigate("#/prompts");
+    if (!_editorState.id && obj.id) {
+      _editorState.id = obj.id;
+      _editorState.existing = obj;
+    }
   } catch (e) { toast(e.message, "err"); }
 }
 
@@ -291,6 +307,7 @@ async function runPage(id) {
     <div class="pane-header"><h2>Result</h2></div>
     <pre class="run-result" id="run-result">— press Run —</pre>
     <div class="result-meta" id="result-meta"></div>
+    <p style="color:var(--text-dim);font-size:11px;margin-top:.75rem">The prompt template is sent as system instructions. "Your message" is the user turn. The model sees the compiled template, not the raw text.</p>
   </div>
 </div>`);
 
