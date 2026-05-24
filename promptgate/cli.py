@@ -434,8 +434,10 @@ def keys_rm(name: str) -> None:
 @click.option("--model", "-m", required=True, help="LiteLLM model string (e.g. gpt-4o).")
 @click.option("--max-retries", default=3, show_default=True, help="Max LLM call attempts.")
 @click.option("--user-message", default=None, help="Custom user turn (default: serialised payload).")
+@click.option("--api-base", default=None, help="Custom LiteLLM api_base URL (e.g. https://routerai.ru/api/v1).")
+@click.option("--api-key", default=None, help="Override API key passed to LiteLLM.")
 @click.pass_context
-def run_cmd(ctx: click.Context, prompt_id: str, payload: str, model: str, max_retries: int, user_message: str | None) -> None:
+def run_cmd(ctx: click.Context, prompt_id: str, payload: str, model: str, max_retries: int, user_message: str | None, api_base: str | None, api_key: str | None) -> None:
     """Compile a prompt, call LLM, validate output, retry on failure.
 
     Requires litellm: pip install pgate[litellm]
@@ -443,6 +445,8 @@ def run_cmd(ctx: click.Context, prompt_id: str, payload: str, model: str, max_re
     Examples:
 
         pgate run sales_v1 --model gpt-4o --payload '{"period": "2024-01"}'
+
+        pgate run sales_v1 --model openai/gpt-5-mini --api-base https://routerai.ru/api/v1 --api-key sk-...
     """
     try:
         from promptgate.runner import run as pg_run
@@ -450,7 +454,12 @@ def run_cmd(ctx: click.Context, prompt_id: str, payload: str, model: str, max_re
         raise click.ClickException("litellm not installed: pip install pgate[litellm]") from exc
 
     data: dict = json.loads(payload)
-    result = pg_run(prompt_id, data, model, db_path=ctx.obj["db"], max_retries=max_retries, user_message=user_message)
+    litellm_kwargs: dict = {}
+    if api_base:
+        litellm_kwargs["api_base"] = api_base
+    if api_key:
+        litellm_kwargs["api_key"] = api_key
+    result = pg_run(prompt_id, data, model, db_path=ctx.obj["db"], max_retries=max_retries, user_message=user_message, litellm_kwargs=litellm_kwargs or None)
     if result.ok:
         click.echo(json.dumps(result.data, ensure_ascii=False, indent=2))
     else:
