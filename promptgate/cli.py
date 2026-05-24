@@ -428,6 +428,278 @@ def keys_rm(name: str) -> None:
     click.echo(f"Removed '{name}'.")
 
 
+@main.command("run")
+@click.argument("prompt_id")
+@click.option("--payload", "-p", default="{}", help="JSON payload string.")
+@click.option("--model", "-m", required=True, help="LiteLLM model string (e.g. gpt-4o).")
+@click.option("--max-retries", default=3, show_default=True, help="Max LLM call attempts.")
+@click.option("--user-message", default=None, help="Custom user turn (default: serialised payload).")
+@click.pass_context
+def run_cmd(ctx: click.Context, prompt_id: str, payload: str, model: str, max_retries: int, user_message: str | None) -> None:
+    """Compile a prompt, call LLM, validate output, retry on failure.
+
+    Requires litellm: pip install pgate[litellm]
+
+    Examples:
+
+        pgate run sales_v1 --model gpt-4o --payload '{"period": "2024-01"}'
+    """
+    try:
+        from promptgate.runner import run as pg_run
+    except ImportError as exc:
+        raise click.ClickException("litellm not installed: pip install pgate[litellm]") from exc
+
+    data: dict = json.loads(payload)
+    result = pg_run(prompt_id, data, model, db_path=ctx.obj["db"], max_retries=max_retries, user_message=user_message)
+    if result.ok:
+        click.echo(json.dumps(result.data, ensure_ascii=False, indent=2))
+    else:
+        click.echo(f"[FAILED after {result.attempts} attempt(s)]", err=True)
+        click.echo(result.raw_output, err=True)
+        raise SystemExit(1)
+
+
+@main.command("serve")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Bind host.")
+@click.option("--port", default=8080, show_default=True, help="Bind port.")
+@click.pass_context
+def serve_cmd(ctx: click.Context, host: str, port: int) -> None:
+    """Start the PGate REST API server.
+
+    Requires fastapi + uvicorn: pip install pgate[serve]
+
+    Examples:
+
+        pgate serve
+
+        pgate serve --host 0.0.0.0 --port 9000
+    """
+    try:
+        import uvicorn
+        from promptgate.api import make_app
+    except ImportError as exc:
+        raise click.ClickException("fastapi/uvicorn not installed: pip install pgate[serve]") from exc
+
+    app = make_app(ctx.obj["db"])
+    click.echo(f"PGate API → http://{host}:{port}")
+    uvicorn.run(app, host=host, port=port)
+
+
+@main.group("chain", invoke_without_command=True)
+@click.pass_context
+def chain_group(ctx: click.Context) -> None:
+    """Manage and run prompt chains.
+
+    Without a subcommand, lists all chains.
+
+    Examples:
+
+        pgate chain list
+
+        pgate chain add --file chains/pipeline.yaml
+
+        pgate chain run my_chain --payload '{}'
+    """
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(chain_list)
+
+
+@chain_group.command("list")
+@click.pass_context
+def chain_list(ctx: click.Context) -> None:
+    """List all stored chains.
+
+    Examples:
+
+        pgate chain list
+    """
+    from promptgate.chains import list_chains
+    chains = list_chains(ctx.obj["db"])
+    if not chains:
+        click.echo("No chains stored.")
+        return
+    for c in chains:
+        click.echo(f"  {c.id}  {c.name}  ({len(c.steps)} steps)")
+
+
+@chain_group.command("show")
+@click.argument("chain_id")
+@click.pass_context
+def chain_show(ctx: click.Context, chain_id: str) -> None:
+    """Show chain definition as YAML.
+
+    Examples:
+
+        pgate chain show my_chain
+    """
+    from promptgate.chains import get_chain
+    import yaml as _yaml
+    c = get_chain(chain_id, ctx.obj["db"])
+    if c is None:
+        raise click.ClickException(f"Chain '{chain_id}' not found.")
+    click.echo(_yaml.dump(c.model_dump(), default_flow_style=False, allow_unicode=True))
+
+
+@chain_group.command("add")
+@click.option("--file", "-f", "file_path", required=True, type=click.Path(exists=True), help="YAML chain definition file.")
+@click.pass_context
+def chain_add(ctx: click.Context, file_path: str) -> None:
+    """Add or update a chain from a YAML file.
+
+    Examples:
+
+        pgate chain add --file chains/pipeline.yaml
+    """
+    from promptgate.chains import load_chain_from_yaml, upsert_chain
+    chain = load_chain_from_yaml(file_path)
+    upsert_chain(chain, ctx.obj["db"])
+    click.echo(f"Added chain: {chain.id} ({chain.name})")
+
+
+@chain_group.command("rm")
+@click.argument("chain_id")
+@click.pass_context
+def chain_rm(ctx: click.Context, chain_id: str) -> None:
+    """Delete a chain by ID.
+
+    Examples:
+
+        pgate chain rm my_chain
+    """
+    from promptgate.chains import delete_chain
+    if not delete_chain(chain_id, ctx.obj["db"]):
+        raise click.ClickException(f"Chain '{chain_id}' not found.")
+    click.echo(f"Removed chain '{chain_id}'.")
+
+
+@chain_group.command("run")
+@click.argument("chain_id")
+@click.option("--payload", "-p", default="{}", help="JSON initial payload.")
+@click.option("--max-retries", default=3, show_default=True, help="Max LLM retries per step.")
+@click.pass_context
+def chain_run(ctx: click.Context, chain_id: str, payload: str, max_retries: int) -> None:
+    """Run a chain with an initial payload.
+
+    Requires litellm: pip install pgate[litellm]
+
+    Examples:
+
+        pgate chain run my_chain --payload '{"topic": "AI"}'
+    """
+    data: dict = json.loads(payload)
+    try:
+        from promptgate.chains import run_chain
+        result = run_chain(chain_id, data, db_path=ctx.obj["db"], max_retries_per_step=max_retries)
+    except ImportError as exc:
+        raise click.ClickException("litellm not installed: pip install pgate[litellm]") from exc
+    if result.ok:
+        click.echo(json.dumps(result.context, ensure_ascii=False, indent=2))
+    else:
+        click.echo(f"[FAILED at step {result.failed_step}]", err=True)
+        raise SystemExit(1)
+
+
+@main.group("profile", invoke_without_command=True)
+@click.pass_context
+def profile_group(ctx: click.Context) -> None:
+    """Manage named environment profiles (dev/staging/prod).
+
+    Without a subcommand, lists all profiles.
+
+    Examples:
+
+        pgate profile list
+
+        pgate profile add dev --db ~/.promptgate/dev.sqlite
+
+        pgate profile set dev
+    """
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(profile_list)
+
+
+@profile_group.command("list")
+def profile_list() -> None:
+    """List all profiles with default marker.
+
+    Examples:
+
+        pgate profile list
+    """
+    from promptgate.profiles import list_profiles
+    profiles = list_profiles()
+    if not profiles:
+        click.echo("No profiles configured.")
+        return
+    for name, is_default in profiles:
+        marker = "* " if is_default else "  "
+        click.echo(f"{marker}{name}")
+
+
+@profile_group.command("show")
+@click.argument("name", default=None, required=False)
+def profile_show(name: str | None) -> None:
+    """Show resolved config for a profile (default if name omitted).
+
+    Examples:
+
+        pgate profile show
+
+        pgate profile show staging
+    """
+    from promptgate.profiles import get_profile
+    try:
+        p = get_profile(name)
+    except KeyError as exc:
+        raise click.ClickException(str(exc)) from exc
+    for k, v in p.items():
+        click.echo(f"  {k}: {v}")
+
+
+@profile_group.command("add")
+@click.argument("name")
+@click.option("--db", "db_path", default=None, help="Path to SQLite DB.")
+@click.option("--cache-dir", default=None, help="Contract cache directory.")
+@click.option("--model", "default_model", default=None, help="Default LiteLLM model.")
+@click.option("--api-base", "litellm_api_base", default=None, help="Custom LiteLLM API base URL.")
+def profile_add(name: str, db_path: str | None, cache_dir: str | None, default_model: str | None, litellm_api_base: str | None) -> None:
+    """Create or update a named profile.
+
+    Examples:
+
+        pgate profile add dev --db ~/.promptgate/dev.sqlite --model gpt-4o-mini
+    """
+    from promptgate.profiles import save_profile
+    config: dict = {}
+    if db_path:
+        config["db_path"] = db_path
+    if cache_dir:
+        config["cache_dir"] = cache_dir
+    if default_model:
+        config["default_model"] = default_model
+    if litellm_api_base:
+        config["litellm_api_base"] = litellm_api_base
+    save_profile(name, config)
+    click.echo(f"Saved profile '{name}'.")
+
+
+@profile_group.command("set")
+@click.argument("name")
+def profile_set(name: str) -> None:
+    """Set the default profile.
+
+    Examples:
+
+        pgate profile set prod
+    """
+    from promptgate.profiles import set_default_profile
+    try:
+        set_default_profile(name)
+    except KeyError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Default profile set to '{name}'.")
+
+
 @main.command("mcp")
 @click.option("--stdio", "transport", flag_value="stdio", default=True, help="Run MCP over stdio.")
 @click.pass_context
