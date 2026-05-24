@@ -197,6 +197,11 @@ function setMode(mode) {
         <input id="s-name" placeholder="Human-readable name" value="${escHtml(name)}">
       </div>
       <div class="field-row">
+        <label>Tags</label>
+        <input id="s-tags" placeholder="production, summarization, gpt4" value="${escHtml((existing?.tags || []).join(', '))}">
+        <span class="field-hint">Comma-separated. Used for search and filtering.</span>
+      </div>
+      <div class="field-row">
         <label>Prompt template <span class="field-required">*</span></label>
         <textarea class="mono" id="s-tmpl" placeholder="You are a helpful assistant.\n\nAnswer the question: {{ question }}">${escHtml(tmpl)}</textarea>
         <span class="field-hint">Use {{ variable }} for placeholders. Simple prompts accept any LLM output.</span>
@@ -235,9 +240,11 @@ function buildSimpleObj() {
   const id   = document.getElementById("s-id").value.trim();
   const name = document.getElementById("s-name").value.trim();
   const tmpl = document.getElementById("s-tmpl").value.trim();
+  const tags = document.getElementById("s-tags").value
+    .split(",").map(t => t.trim()).filter(Boolean);
   if (!id)   { toast("ID required", "err"); return null; }
   if (!tmpl) { toast("Template required", "err"); return null; }
-  return { id, name: name || id, template: tmpl, schema_: {} };
+  return { id, name: name || id, template: tmpl, schema_: {}, ...(tags.length ? {tags} : {}) };
 }
 
 async function saveSimple() {
