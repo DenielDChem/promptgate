@@ -1,19 +1,19 @@
-# PromptGate
+# PGate
 
 **Prompt ORM for LLM agents.** Store, find, compile, validate, and cache prompt contracts — locally, without cloud, without telemetry.
 
 ## Install
 
 ```bash
-pip install promptgate
+pip install pgate
 ```
 
 ## Quickstart
 
 ```bash
-promptgate init
-promptgate add --file examples/report_sales.yaml
-promptgate compile --interactive
+pgate init
+pgate add --file examples/report_sales.yaml
+pgate compile --interactive
 ```
 
 ## MCP (Claude Desktop / Cursor)
@@ -22,8 +22,8 @@ Add to `claude_desktop_config.json`:
 
 ```json
 {
-  "promptgate": {
-    "command": "promptgate",
+  "pgate": {
+    "command": "pgate",
     "args": ["mcp", "--stdio"]
   }
 }

@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "prompt-gate"
+name = "pgate"
 version = "0.1.1"
-description = "Prompt ORM — store, find, compile, validate, cache LLM prompt contracts locally"
+description = "PGate — Prompt ORM for LLM agents. Store, compile, validate and cache prompt contracts locally."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
@@ -35,6 +35,7 @@ postgres = [
 ]
 
 [project.scripts]
+pgate = "promptgate.cli:main"
 promptgate = "promptgate.cli:main"
 
 [tool.hatch.build.targets.wheel]
