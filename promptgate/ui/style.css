@@ -1,0 +1,854 @@
+/* ── pixel art wood & linen theme ── */
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Special+Elite&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap');
+
+:root {
+  /* wood palette */
+  --wood-darkest: #3D2010;
+  --wood-dark:    #6B3D1E;
+  --wood-mid:     #9B5F2E;
+  --wood-light:   #C4895A;
+  --wood-pale:    #D9B48A;
+  --wood-grain:   #B87848;
+
+  /* linen/paper palette */
+  --linen:        #E8D5B0;
+  --linen-dark:   #D4BF96;
+  --paper:        #FBF3E0;
+  --paper-warm:   #F5EAC8;
+  --paper-line:   #D6C89A;
+  --parchment:    #EEE0C0;
+
+  /* ink */
+  --ink:          #2C1808;
+  --ink-mid:      #5A3820;
+  --ink-faded:    #8A6840;
+  --ink-stamp:    #6B2000;
+
+  /* accents */
+  --amber:        #B8720A;
+  --amber-dark:   #8B5008;
+  --red-ink:      #8B1A00;
+  --green-seal:   #2D5A27;
+
+  /* pixel grid */
+  --px: 2px;
+
+  /* fonts */
+  --font-pixel: 'Press Start 2P', monospace;
+  --font-type:  'Courier Prime', 'Courier New', monospace;
+  --font-stamp: 'Special Elite', serif;
+}
+
+/* ── reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { image-rendering: pixelated; }
+
+/* ── body — linen tablecloth ── */
+body {
+  font-family: var(--font-type);
+  background-color: var(--linen);
+  background-image: url('img/linen_bg.png');
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  image-rendering: pixelated;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.65;
+  min-height: 100vh;
+}
+
+/* ── scanlines overlay (pixel mood) ── */
+.scanlines {
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    transparent 0px,
+    transparent 2px,
+    rgba(0,0,0,0.015) 2px,
+    rgba(0,0,0,0.015) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ── header — wood plank ── */
+header {
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+  padding: 0 2rem;
+  height: 72px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+
+  /* wood plank texture */
+  background-color: var(--wood-dark);
+  background-image: url('img/wood_header.png');
+  background-size: auto 72px;
+  background-repeat: repeat-x;
+  image-rendering: pixelated;
+
+  /* pixel border bottom */
+  border-bottom: 4px solid var(--wood-darkest);
+  box-shadow:
+    0 2px 0 var(--wood-grain),
+    0 4px 0 var(--wood-darkest),
+    0 6px 12px rgba(0,0,0,0.3);
+}
+
+.logo {
+  font-family: var(--font-pixel);
+  font-size: 15px;
+  color: var(--paper-warm);
+  letter-spacing: 0.05em;
+  text-shadow:
+    2px 2px 0 var(--wood-darkest),
+    -1px 0 0 rgba(255,220,150,0.3);
+  white-space: nowrap;
+}
+
+nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--wood-pale);
+  text-decoration: none;
+  padding: 0.55rem 0.9rem;
+  border: 2px solid transparent;
+  transition: all 0.1s;
+  letter-spacing: 0.04em;
+}
+
+nav a:hover {
+  color: var(--paper);
+  border-color: var(--wood-pale);
+  box-shadow: 2px 2px 0 var(--wood-darkest);
+  transform: translate(-1px, -1px);
+}
+
+nav a.active {
+  color: var(--paper-warm);
+  border-color: var(--wood-grain);
+  background: rgba(255,255,255,0.08);
+  box-shadow: 2px 2px 0 var(--wood-darkest), inset 0 0 0 1px rgba(255,255,255,0.1);
+}
+
+/* nav icon images */
+.nav-icon {
+  width: 26px;
+  height: 26px;
+  image-rendering: pixelated;
+  object-fit: contain;
+  opacity: 0.85;
+  filter: drop-shadow(1px 1px 0 rgba(0,0,0,0.4));
+}
+
+nav a:hover .nav-icon,
+nav a.active .nav-icon { opacity: 1; }
+
+/* ── main ── */
+#main {
+  padding: 2.5rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ── typography ── */
+h1 {
+  font-family: var(--font-pixel);
+  font-size: 18px;
+  color: var(--wood-dark);
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.05em;
+  text-shadow: 2px 2px 0 var(--linen-dark);
+  padding-bottom: 0.75rem;
+}
+
+h1::after {
+  content: "";
+  display: block;
+  height: 20px;
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+  background-image: url('img/divider_wood.png');
+  background-size: auto 20px;
+  background-repeat: repeat-x;
+  image-rendering: pixelated;
+  opacity: 0.85;
+}
+
+h2 {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--ink-mid);
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+p.loading {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--ink-faded);
+}
+
+/* ── pixel button — wood key ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.4rem;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: transform 0.07s, box-shadow 0.07s;
+
+  /* pressed 3D pixel effect — wood button texture */
+  background-color: var(--wood-mid);
+  background-image: url('img/wood_btn.png');
+  background-size: auto 100%;
+  background-repeat: repeat-x;
+  image-rendering: pixelated;
+  color: var(--paper-warm);
+  text-shadow: 1px 1px 0 var(--wood-darkest);
+
+  box-shadow:
+    0 1px 0 var(--wood-grain),
+    0 2px 0 var(--wood-dark),
+    0 3px 0 var(--wood-darkest),
+    0 4px 0 rgba(0,0,0,0.25),
+    inset 0 1px 0 rgba(255,255,255,0.15);
+}
+
+.btn:hover {
+  background-image: url('img/wood_btn_hover.png');
+  transform: translate(0, -1px);
+  box-shadow:
+    0 1px 0 var(--wood-grain),
+    0 2px 0 var(--wood-dark),
+    0 3px 0 var(--wood-darkest),
+    0 5px 0 rgba(0,0,0,0.2),
+    inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+.btn:active {
+  transform: translate(2px, 3px);
+  box-shadow:
+    0 1px 0 var(--wood-darkest),
+    inset 0 1px 0 rgba(0,0,0,0.2);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* secondary — pale wood */
+.btn.secondary {
+  background-color: var(--parchment);
+  background-image: linear-gradient(
+    to bottom,
+    var(--paper) 0%,
+    var(--parchment) 60%,
+    var(--linen-dark) 100%
+  );
+  color: var(--ink-mid);
+  text-shadow: none;
+  box-shadow:
+    0 1px 0 var(--paper-line),
+    0 2px 0 var(--wood-pale),
+    0 3px 0 var(--wood-light),
+    0 4px 0 rgba(0,0,0,0.15),
+    inset 0 1px 0 rgba(255,255,255,0.6);
+}
+
+.btn.secondary:hover {
+  background-image: linear-gradient(
+    to bottom,
+    #ffffff 0%,
+    var(--paper) 60%,
+    var(--parchment) 100%
+  );
+}
+
+/* danger — ink stamp red */
+.btn.danger {
+  background-color: transparent;
+  background-image: none;
+  color: var(--red-ink);
+  border: 2px solid var(--red-ink);
+  box-shadow: 2px 2px 0 rgba(139, 26, 0, 0.3);
+  text-shadow: none;
+}
+
+.btn.danger:hover {
+  background-color: var(--red-ink);
+  color: var(--paper);
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 rgba(139, 26, 0, 0.4);
+}
+
+.btn.danger:active { transform: translate(1px, 1px); box-shadow: none; }
+
+.btn-sm { padding: 0.5rem 0.85rem; font-size: 8px; }
+
+/* ── toolbar ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.toolbar .spacer { flex: 1; }
+
+.search-input {
+  font-family: var(--font-type);
+  background: var(--paper);
+  border: 2px solid var(--wood-pale);
+  color: var(--ink);
+  padding: 0.6rem 0.9rem;
+  font-size: 15px;
+  width: 280px;
+  outline: none;
+  box-shadow: inset 2px 2px 0 rgba(0,0,0,0.06), 2px 2px 0 var(--wood-pale);
+  transition: border-color 0.15s;
+}
+
+.search-input:focus {
+  border-color: var(--wood-mid);
+  box-shadow: inset 2px 2px 0 rgba(0,0,0,0.06), 2px 2px 0 var(--wood-mid);
+}
+
+.search-input::placeholder { color: var(--ink-faded); font-style: italic; }
+
+/* ── paper card — letter on desk ── */
+.paper-card {
+  background-color: var(--paper);
+  background-image: url('img/paper_card.png');
+  background-size: 256px 256px;
+  background-repeat: repeat;
+  image-rendering: pixelated;
+  border: 1px solid var(--paper-line);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+
+  /* torn-paper shadow */
+  box-shadow:
+    2px 2px 0 var(--linen-dark),
+    4px 4px 0 var(--wood-pale),
+    6px 6px 0 rgba(0,0,0,0.08);
+}
+
+/* ── prompt table — ledger style ── */
+.prompt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-type);
+  font-size: 15px;
+  background-color: var(--paper);
+  background-image: url('img/paper_bg.png');
+  background-size: 256px 256px;
+  background-repeat: repeat;
+  image-rendering: pixelated;
+  box-shadow:
+    2px 2px 0 var(--linen-dark),
+    4px 4px 0 var(--wood-pale),
+    6px 6px 0 rgba(0,0,0,0.1);
+  border: 2px solid var(--wood-pale);
+}
+
+.prompt-table th {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-align: left;
+  padding: 0.85rem 1rem;
+  color: var(--paper-warm);
+  background-color: var(--wood-mid);
+  background-image: linear-gradient(
+    to bottom,
+    var(--wood-light) 0%,
+    var(--wood-mid) 100%
+  );
+  border-right: 1px solid var(--wood-dark);
+  text-shadow: 1px 1px 0 var(--wood-darkest);
+}
+
+.prompt-table th:last-child { border-right: none; }
+
+.prompt-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--paper-line);
+  border-right: 1px solid rgba(180,150,100,0.2);
+  vertical-align: middle;
+}
+
+.prompt-table td:last-child { border-right: none; }
+
+.prompt-table tr:nth-child(even) td {
+  background-color: var(--paper-warm);
+}
+
+.prompt-table tr:hover td {
+  background-color: var(--parchment);
+}
+
+.prompt-table .actions { display: flex; gap: 0.4rem; }
+
+.prompt-id {
+  font-family: var(--font-type);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--wood-dark);
+  text-decoration: none;
+}
+
+.prompt-id:hover {
+  color: var(--amber);
+  text-decoration: underline;
+  text-decoration-style: dashed;
+}
+
+/* ── tags — rubber stamp style ── */
+.tag {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  color: var(--ink-stamp);
+  border: 1px solid var(--ink-stamp);
+  opacity: 0.75;
+  transform: rotate(-1deg);
+  display: inline-block;
+}
+
+.tag:nth-child(even) { transform: rotate(1deg); }
+
+/* ── form fields — typewriter ── */
+.field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.field-row label {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--ink-mid);
+  text-transform: uppercase;
+}
+
+.field-row input,
+.field-row select,
+.field-row textarea {
+  font-family: var(--font-type);
+  background: var(--paper);
+  background-image: repeating-linear-gradient(
+    transparent 0px, transparent 23px,
+    rgba(180,150,100,0.25) 23px, rgba(180,150,100,0.25) 24px
+  );
+  border: 2px solid var(--wood-pale);
+  color: var(--ink);
+  padding: 0.6rem 0.9rem;
+  font-size: 15px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.1s;
+  box-shadow: inset 1px 1px 0 rgba(0,0,0,0.06), 1px 1px 0 var(--linen-dark);
+}
+
+.field-row input:focus,
+.field-row select:focus,
+.field-row textarea:focus {
+  border-color: var(--wood-mid);
+  box-shadow: inset 1px 1px 0 rgba(0,0,0,0.06), 1px 1px 0 var(--wood-pale), 0 0 0 3px rgba(155,95,46,0.1);
+}
+
+.field-row textarea {
+  resize: vertical;
+  min-height: 90px;
+}
+
+.field-row textarea.mono {
+  font-family: 'Courier Prime', 'Courier New', monospace;
+  font-size: 14px;
+  min-height: 200px;
+}
+
+.field-row select {
+  cursor: pointer;
+  background-image:
+    repeating-linear-gradient(transparent 0px, transparent 23px, rgba(180,150,100,0.25) 23px, rgba(180,150,100,0.25) 24px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0h2v2h2v2h2V2h2V0h2' fill='%236B3D1E'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: auto, 10px 6px;
+  appearance: none;
+  padding-right: 2rem;
+}
+
+.field-hint {
+  font-family: var(--font-type);
+  font-style: italic;
+  font-size: 11px;
+  color: var(--ink-faded);
+}
+
+/* ── split pane ── */
+.split-pane {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 760px) { .split-pane { grid-template-columns: 1fr; } }
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+/* ── compile preview — telegram/memo ── */
+.compile-preview {
+  background-color: var(--paper-warm);
+  background-image: url('img/paper_bg.png');
+  background-size: 128px 128px;
+  background-repeat: repeat;
+  image-rendering: pixelated;
+  border: 2px solid var(--wood-pale);
+  border-left: 6px solid var(--wood-mid);
+  padding: 1rem 1.25rem;
+  font-family: 'Courier Prime', monospace;
+  font-size: 14px;
+  white-space: pre-wrap;
+  min-height: 180px;
+  color: var(--ink);
+  overflow-x: auto;
+  box-shadow: 2px 2px 0 var(--linen-dark), 4px 4px 0 rgba(0,0,0,0.08);
+}
+
+/* ── run layout ── */
+.run-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 760px) { .run-layout { grid-template-columns: 1fr; } }
+
+/* ── result — paper scroll ── */
+.run-result {
+  background-color: var(--paper);
+  background-image: url('img/paper_bg.png');
+  background-size: 128px 128px;
+  background-repeat: repeat;
+  image-rendering: pixelated;
+  border: 2px solid var(--wood-pale);
+  border-left: 6px solid var(--wood-pale);
+  padding: 1rem 1.25rem;
+  font-family: 'Courier Prime', monospace;
+  font-size: 14px;
+  white-space: pre-wrap;
+  min-height: 200px;
+  overflow-x: auto;
+  color: var(--ink);
+  box-shadow: 2px 2px 0 var(--linen-dark), 4px 4px 0 rgba(0,0,0,0.08);
+}
+
+.run-result.ok { border-left-color: var(--green-seal); }
+.run-result.err { border-left-color: var(--red-ink); }
+
+.result-meta {
+  display: flex;
+  gap: 1rem;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--ink-faded);
+  margin-top: 0.5rem;
+  align-items: center;
+}
+
+/* ── chain steps — numbered list ── */
+.chain-steps {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.chain-step {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--paper);
+  border: 2px solid var(--wood-pale);
+  padding: 0.85rem 1.1rem;
+  font-size: 15px;
+  box-shadow: 2px 2px 0 var(--linen-dark);
+}
+
+.step-num {
+  width: 30px;
+  height: 30px;
+  background: var(--wood-mid);
+  color: var(--paper-warm);
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 2px 2px 0 var(--wood-dark);
+}
+
+.step-id { font-family: var(--font-type); font-weight: 700; color: var(--wood-dark); }
+.step-arrow { color: var(--ink-faded); font-size: 11px; font-style: italic; }
+
+/* ── card ── */
+.card {
+  background: var(--paper);
+  border: 2px solid var(--wood-pale);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 2px 2px 0 var(--linen-dark), 4px 4px 0 rgba(0,0,0,0.07);
+}
+
+/* ── badges — rubber stamps ── */
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.75rem;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  font-weight: bold;
+}
+
+.badge.ok {
+  color: var(--green-seal);
+  border: 2px solid var(--green-seal);
+  box-shadow: 1px 1px 0 rgba(45,90,39,0.3);
+}
+
+.badge.err {
+  color: var(--red-ink);
+  border: 2px solid var(--red-ink);
+  box-shadow: 1px 1px 0 rgba(139,26,0,0.3);
+}
+
+/* ── toast — sticky note ── */
+#toast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  background: var(--paper-warm);
+  background-image: repeating-linear-gradient(
+    transparent 0px, transparent 19px,
+    rgba(180,150,100,0.3) 19px, rgba(180,150,100,0.3) 20px
+  );
+  border: 2px solid var(--wood-pale);
+  border-left: 5px solid var(--wood-mid);
+  padding: 0.65rem 1rem;
+  font-family: var(--font-type);
+  font-size: 13px;
+  opacity: 0;
+  transform: translateY(8px) rotate(1deg);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  z-index: 999;
+  max-width: 320px;
+  color: var(--ink);
+  box-shadow: 3px 3px 0 var(--linen-dark), 5px 5px 0 rgba(0,0,0,0.12);
+}
+
+#toast.show { opacity: 1; transform: translateY(0) rotate(0.5deg); }
+#toast.ok { border-left-color: var(--green-seal); }
+#toast.err { border-left-color: var(--red-ink); }
+
+/* ── empty state — quill + desk illustration ── */
+.empty {
+  text-align: center;
+  padding: 2rem 1rem 3rem;
+  color: var(--ink-faded);
+}
+
+.empty::before {
+  content: "";
+  display: block;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 1.25rem;
+  background-image: url('img/empty_state.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  image-rendering: pixelated;
+  opacity: 0.85;
+}
+
+.empty h3 {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.empty p { font-style: italic; }
+
+/* ── back link ── */
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ink-faded);
+  text-decoration: none;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  margin-bottom: 1rem;
+}
+
+.back:hover { color: var(--wood-dark); }
+
+/* ── run form wrapper ── */
+.run-form {
+  background: var(--paper);
+  border: 2px solid var(--wood-pale);
+  padding: 1.25rem;
+  box-shadow: 2px 2px 0 var(--linen-dark), 4px 4px 0 rgba(0,0,0,0.07);
+}
+
+/* ── field schema row ── */
+.field-name { font-family: var(--font-type); font-weight: 700; color: var(--wood-dark); flex: 1; }
+.field-type { color: var(--ink-faded); font-style: italic; font-size: 14px; }
+.field-required { color: var(--red-ink); font-family: var(--font-pixel); font-size: 9px; }
+
+/* ── decorative corner stamp ── */
+.stamp {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--ink-stamp);
+  border: 1px solid var(--ink-stamp);
+  padding: 0.2rem 0.5rem;
+  opacity: 0.5;
+  display: inline-block;
+  transform: rotate(-3deg);
+}
+
+/* ── btn icon images ── */
+.btn-icon {
+  width: 18px;
+  height: 18px;
+  image-rendering: pixelated;
+  object-fit: contain;
+  display: inline-block;
+  vertical-align: middle;
+  filter: drop-shadow(1px 1px 0 rgba(0,0,0,0.4));
+}
+
+.btn.secondary .btn-icon { filter: drop-shadow(1px 1px 0 rgba(0,0,0,0.2)); }
+.btn.danger .btn-icon { filter: none; }
+
+.btn-sm .btn-icon { width: 14px; height: 14px; }
+
+/* ── search input with magnifying glass icon ── */
+.search-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.search-wrapper .search-icon {
+  position: absolute;
+  left: 10px;
+  width: 22px;
+  height: 22px;
+  image-rendering: pixelated;
+  object-fit: contain;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.search-wrapper .search-input { padding-left: 40px; }
+
+/* ── corner ornament on framed elements ── */
+.framed {
+  position: relative;
+}
+
+.framed::before,
+.framed::after {
+  content: "";
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  background-image: url('img/corner_ornament.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.framed::before { top: -4px; left: -4px; }
+.framed::after  { bottom: -4px; right: -4px; transform: rotate(180deg); }
+
+/* ── wax seal decoration ── */
+.wax-seal {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  background-image: url('img/wax_seal.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+/* ── h2 with mini divider ── */
+h2::after {
+  content: "";
+  display: block;
+  height: 6px;
+  margin-top: 0.4rem;
+  margin-bottom: 0.5rem;
+  background-image: url('img/divider_wood.png');
+  background-size: auto 6px;
+  background-repeat: repeat-x;
+  image-rendering: pixelated;
+  opacity: 0.5;
+}
+
+/* ── scrollbar ── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--linen-dark); }
+::-webkit-scrollbar-thumb {
+  background: var(--wood-mid);
+  border: 2px solid var(--linen-dark);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--wood-dark); }
+
+/* ── selection ── */
+::selection {
+  background: rgba(155, 95, 46, 0.25);
+  color: var(--ink);
+}

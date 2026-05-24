@@ -494,15 +494,18 @@ def run_cmd(ctx: click.Context, prompt_id: str, payload: str, model: str | None,
 @main.command("serve")
 @click.option("--host", default="127.0.0.1", show_default=True, help="Bind host.")
 @click.option("--port", default=8080, show_default=True, help="Bind port.")
+@click.option("--open", "open_browser", is_flag=True, default=False, help="Open browser to UI automatically.")
 @click.pass_context
-def serve_cmd(ctx: click.Context, host: str, port: int) -> None:
-    """Start the PGate REST API server.
+def serve_cmd(ctx: click.Context, host: str, port: int, open_browser: bool) -> None:
+    """Start the PGate REST API server + local web UI.
 
     Requires fastapi + uvicorn: pip install pgate[serve]
 
     Examples:
 
         pgate serve
+
+        pgate serve --open
 
         pgate serve --host 0.0.0.0 --port 9000
     """
@@ -513,7 +516,12 @@ def serve_cmd(ctx: click.Context, host: str, port: int) -> None:
         raise click.ClickException("fastapi/uvicorn not installed: pip install pgate[serve]") from exc
 
     app = make_app(ctx.obj["db"])
-    click.echo(f"PGate API → http://{host}:{port}")
+    ui_url = f"http://{host}:{port}/ui/"
+    click.echo(f"PGate API  → http://{host}:{port}")
+    click.echo(f"PGate UI   → {ui_url}")
+    if open_browser:
+        import threading, webbrowser
+        threading.Timer(1.0, lambda: webbrowser.open(ui_url)).start()
     uvicorn.run(app, host=host, port=port)
 
 

@@ -5,6 +5,8 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from promptgate.chains import (
@@ -186,5 +188,16 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
         except ImportError as exc:
             raise HTTPException(501, str(exc)) from exc
         return {"ok": result.ok, "context": result.context, "failed_step": result.failed_step, "steps_run": result.steps_run}
+
+    # ── static UI ─────────────────────────────────────────────────────────────
+
+    @app.get("/")
+    def root_redirect() -> RedirectResponse:
+        """Redirect root to the web UI."""
+        return RedirectResponse("/ui/")
+
+    _ui_dir = Path(__file__).parent / "ui"
+    if _ui_dir.is_dir():
+        app.mount("/ui", StaticFiles(directory=_ui_dir, html=True), name="ui")
 
     return app
