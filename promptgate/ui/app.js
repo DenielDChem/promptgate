@@ -85,25 +85,20 @@ function updateNav() {
 async function promptsPage() {
   render(`<h1>Prompts</h1>
 <div class="toolbar">
-  <div class="search-wrapper">
-    <img src="img/icon_search.png" class="search-icon" alt="">
-    <input class="search-input" id="search-q" placeholder="Search prompts…" type="search">
-  </div>
+  <input class="search-input" id="search-q" placeholder="Search prompts…" type="search">
   <span class="spacer"></span>
-  <button class="btn" onclick="navigate('#/prompts/new')">
-    <img src="img/icon_quill.png" class="btn-icon" alt=""> New Prompt
-  </button>
+  <button class="btn primary" onclick="navigate('#/prompts/new')">+ New Prompt</button>
 </div>
-<table class="prompt-table framed">
+<table class="prompt-table">
   <thead><tr><th>ID</th><th>Name</th><th>Tags</th><th>Model</th><th></th></tr></thead>
-  <tbody id="prompt-rows"><tr><td colspan="5" style="color:var(--ink-faded);padding:1.5rem">Loading…</td></tr></tbody>
+  <tbody id="prompt-rows"><tr><td colspan="5" style="color:var(--text-dim);padding:1.5rem">Loading…</td></tr></tbody>
 </table>`);
 
   let allPrompts = [];
   try {
     allPrompts = await api.get("/api/prompts");
   } catch (e) {
-    document.getElementById("prompt-rows").innerHTML = `<tr><td colspan="5" style="color:var(--danger)">${escHtml(e.message)}</td></tr>`;
+    document.getElementById("prompt-rows").innerHTML = `<tr><td colspan="5" style="color:var(--err)">${escHtml(e.message)}</td></tr>`;
     return;
   }
 
@@ -115,16 +110,12 @@ async function promptsPage() {
     document.getElementById("prompt-rows").innerHTML = prompts.map(p => `
       <tr>
         <td><a class="prompt-id" href="#/prompts/${escHtml(p.id)}">${escHtml(p.id)}</a></td>
-        <td>${escHtml(p.name || "—")}</td>
-        <td>${(p.tags || []).map(t => `<span class="tag">${escHtml(t)}</span>`).join(" ")}</td>
-        <td style="font-family:'Courier Prime',monospace;font-size:12px;color:var(--ink-faded)">${escHtml(p.model || "—")}</td>
+        <td style="color:var(--text-2)">${escHtml(p.name || "—")}</td>
+        <td>${(p.tags || []).map(t => `<span class="tag">${escHtml(t)}</span>`).join("")}</td>
+        <td style="font-family:var(--mono);font-size:12px;color:var(--text-dim)">${escHtml(p.model || "—")}</td>
         <td><div class="actions">
-          <a class="btn btn-sm secondary" href="#/prompts/${escHtml(p.id)}/run">
-            <img src="img/icon_run.png" class="btn-icon" alt=""> Run
-          </a>
-          <button class="btn btn-sm danger" onclick="deletePrompt('${escHtml(p.id)}')">
-            <img src="img/icon_trash.png" class="btn-icon" alt="">
-          </button>
+          <a class="btn btn-sm secondary" href="#/prompts/${escHtml(p.id)}/run">Run</a>
+          <button class="btn btn-sm danger" onclick="deletePrompt('${escHtml(p.id)}')">Delete</button>
         </div></td>
       </tr>`).join("");
   }
@@ -156,57 +147,137 @@ async function deletePrompt(id) {
 async function editorPage(id) {
   render(`<a class="back" href="#/prompts">← Back</a>
 <h1>${id ? `Edit: ${escHtml(id)}` : "New Prompt"}</h1>
+
+<div class="mode-toggle">
+  <button id="mode-simple" onclick="setMode('simple')">Simple</button>
+  <button id="mode-json" onclick="setMode('json')">JSON</button>
+</div>
+
 <div class="split-pane">
-  <div>
-    <div class="field-row">
-      <label>JSON (PromptConfig)</label>
-      <textarea class="mono" id="yaml-src" placeholder='{"id":"my_v1","name":"My Prompt","template":"Hello {{ name }}","schema_":{"type":"object","properties":{"greeting":{"type":"string"}},"required":["greeting"]}}'></textarea>
-    </div>
-    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-      <button class="btn" id="save-btn">
-        <img src="img/icon_save.png" class="btn-icon" alt=""> Save
-      </button>
-      <button class="btn secondary" id="compile-btn">
-        <img src="img/icon_scroll.png" class="btn-icon" alt=""> Compile
-      </button>
-      ${id ? `<a class="btn secondary" href="#/prompts/${escHtml(id)}/run"><img src="img/icon_run.png" class="btn-icon" alt=""> Run</a>` : ""}
-    </div>
-  </div>
+  <div id="editor-left"></div>
   <div>
     <div class="pane-header"><h2>Compiled Contract</h2></div>
-    <pre class="compile-preview" id="compile-out">— press Compile Preview —</pre>
+    <pre class="compile-preview" id="compile-out">— press Compile —</pre>
   </div>
 </div>`);
 
+  let existing = null;
   if (id) {
     try {
-      const p = await api.get(`/api/prompts/${encodeURIComponent(id)}`);
-      document.getElementById("yaml-src").value = JSON.stringify(p, null, 2);
+      existing = await api.get(`/api/prompts/${encodeURIComponent(id)}`);
     } catch (e) { toast(e.message, "err"); }
   }
 
-  document.getElementById("save-btn").addEventListener("click", async () => {
-    const raw = document.getElementById("yaml-src").value.trim();
-    try {
-      const obj = JSON.parse(raw);
-      await api.post("/api/prompts", obj);
-      toast("Saved " + (obj.id || "prompt"));
-      navigate("#/prompts");
-    } catch (e) { toast(e.message, "err"); }
-  });
+  const hasSchema = existing?.schema_ && Object.keys(existing.schema_).length > 0;
+  setMode(hasSchema ? "json" : "simple", existing, id);
+}
 
-  document.getElementById("compile-btn").addEventListener("click", async () => {
-    const raw = document.getElementById("yaml-src").value.trim();
-    try {
-      const obj = JSON.parse(raw);
-      if (!obj.id) throw new Error("id field required");
-      await api.post("/api/prompts", obj);
-      const contract = await api.post("/api/compile", {prompt_id: obj.id, payload: {}});
-      document.getElementById("compile-out").textContent = JSON.stringify(contract, null, 2);
-    } catch (e) {
-      document.getElementById("compile-out").textContent = "Error: " + e.message;
-    }
-  });
+function setMode(mode, existing, id) {
+  document.querySelectorAll(".mode-toggle button").forEach(b => b.classList.remove("active"));
+  document.getElementById(`mode-${mode}`).classList.add("active");
+
+  const left = document.getElementById("editor-left");
+
+  if (mode === "simple") {
+    const tmpl = existing?.template ?? "";
+    const eid  = existing?.id ?? id ?? "";
+    const name = existing?.name ?? "";
+    left.innerHTML = `
+      <div class="field-row">
+        <label>ID <span class="field-required">*</span></label>
+        <input id="s-id" placeholder="my_prompt_v1" value="${escHtml(eid)}">
+      </div>
+      <div class="field-row">
+        <label>Name</label>
+        <input id="s-name" placeholder="Human-readable name" value="${escHtml(name)}">
+      </div>
+      <div class="field-row">
+        <label>Prompt template <span class="field-required">*</span></label>
+        <textarea class="mono" id="s-tmpl" placeholder="You are a helpful assistant.\n\nAnswer the question: {{ question }}">${escHtml(tmpl)}</textarea>
+        <span class="field-hint">Use {{ variable }} for placeholders. Simple prompts accept any LLM output.</span>
+      </div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <button class="btn primary" id="save-btn">Save</button>
+        <button class="btn secondary" id="compile-btn">Compile</button>
+        ${id ? `<a class="btn secondary" href="#/prompts/${escHtml(id)}/run">Run</a>` : ""}
+      </div>`;
+
+    document.getElementById("save-btn").addEventListener("click", () => saveSimple(id));
+    document.getElementById("compile-btn").addEventListener("click", () => compileSimple(id));
+
+  } else {
+    const val = existing
+      ? JSON.stringify(existing, null, 2)
+      : '{\n  "id": "my_prompt_v1",\n  "name": "My Prompt",\n  "template": "Answer: {{ question }}",\n  "schema_": {\n    "type": "object",\n    "properties": {\n      "answer": { "type": "string" }\n    },\n    "required": ["answer"]\n  }\n}';
+
+    left.innerHTML = `
+      <div class="field-row">
+        <label>PromptConfig JSON</label>
+        <textarea class="mono" id="yaml-src">${escHtml(val)}</textarea>
+      </div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <button class="btn primary" id="save-btn">Save</button>
+        <button class="btn secondary" id="compile-btn">Compile</button>
+        ${id ? `<a class="btn secondary" href="#/prompts/${escHtml(id)}/run">Run</a>` : ""}
+      </div>`;
+
+    document.getElementById("save-btn").addEventListener("click", () => saveJson(id));
+    document.getElementById("compile-btn").addEventListener("click", () => compileJson(id));
+  }
+}
+
+function buildSimpleObj() {
+  const id   = document.getElementById("s-id").value.trim();
+  const name = document.getElementById("s-name").value.trim();
+  const tmpl = document.getElementById("s-tmpl").value.trim();
+  if (!id)   { toast("ID required", "err"); return null; }
+  if (!tmpl) { toast("Template required", "err"); return null; }
+  return { id, name: name || id, template: tmpl, schema_: {} };
+}
+
+async function saveSimple() {
+  const obj = buildSimpleObj();
+  if (!obj) return;
+  try {
+    await api.post("/api/prompts", obj);
+    toast("Saved " + obj.id);
+    navigate("#/prompts");
+  } catch (e) { toast(e.message, "err"); }
+}
+
+async function compileSimple() {
+  const obj = buildSimpleObj();
+  if (!obj) return;
+  try {
+    await api.post("/api/prompts", obj);
+    const contract = await api.post("/api/compile", {prompt_id: obj.id, payload: {}});
+    document.getElementById("compile-out").textContent = JSON.stringify(contract, null, 2);
+  } catch (e) {
+    document.getElementById("compile-out").textContent = "Error: " + e.message;
+  }
+}
+
+async function saveJson() {
+  const raw = document.getElementById("yaml-src").value.trim();
+  try {
+    const obj = JSON.parse(raw);
+    await api.post("/api/prompts", obj);
+    toast("Saved " + (obj.id || "prompt"));
+    navigate("#/prompts");
+  } catch (e) { toast(e.message, "err"); }
+}
+
+async function compileJson() {
+  const raw = document.getElementById("yaml-src").value.trim();
+  try {
+    const obj = JSON.parse(raw);
+    if (!obj.id) throw new Error("id field required");
+    await api.post("/api/prompts", obj);
+    const contract = await api.post("/api/compile", {prompt_id: obj.id, payload: {}});
+    document.getElementById("compile-out").textContent = JSON.stringify(contract, null, 2);
+  } catch (e) {
+    document.getElementById("compile-out").textContent = "Error: " + e.message;
+  }
 }
 
 // ── run page ──────────────────────────────────────────────────────────────────
@@ -215,7 +286,7 @@ async function runPage(id) {
   render(`<a class="back" href="#/prompts/${escHtml(id)}">← ${escHtml(id)}</a>
 <h1>Run: ${escHtml(id)}</h1>
 <div class="run-layout">
-  <div class="run-form" id="run-form-area"><p style="color:var(--text-dim)">Loading schema…</p></div>
+  <div class="run-form" id="run-form-area"><p style="color:var(--text-dim)">Loading…</p></div>
   <div>
     <div class="pane-header"><h2>Result</h2></div>
     <pre class="run-result" id="run-result">— press Run —</pre>
@@ -228,53 +299,64 @@ async function runPage(id) {
     prompt = await api.get(`/api/prompts/${encodeURIComponent(id)}`);
   } catch (e) { toast(e.message, "err"); return; }
 
-  const schema = prompt.schema_ || {};
-  const props = schema.properties || {};
+  const schema   = prompt.schema_ || {};
+  const props    = schema.properties || {};
   const required = new Set(schema.required || []);
-  const modelDefault = prompt.model || "";
+  const hasSchema = Object.keys(props).length > 0;
 
   document.getElementById("run-form-area").innerHTML = `
     <div class="field-row">
-      <label>Model</label>
-      <input id="run-model" value="${escHtml(modelDefault)}" placeholder="openai/gpt-4o-mini">
+      <label>Model <span class="field-required">*</span></label>
+      <input id="run-model" value="${escHtml(prompt.model || "")}" placeholder="openai/gpt-4o-mini">
     </div>
-    ${Object.entries(props).map(([k, v]) => `
-    <div class="field-row">
-      <label>${escHtml(k)}${required.has(k) ? ' <span class="field-required">*</span>' : ""}</label>
-      ${v.type === "integer" || v.type === "number"
-        ? `<input id="field-${escHtml(k)}" type="number" placeholder="${escHtml(v.description || v.type)}">`
-        : v.enum
-        ? `<select id="field-${escHtml(k)}">${v.enum.map(o => `<option value="${escHtml(o)}">${escHtml(o)}</option>`).join("")}</select>`
-        : `<input id="field-${escHtml(k)}" type="text" placeholder="${escHtml(v.description || v.type || "")}">`}
-      ${v.description ? `<span class="field-hint">${escHtml(v.description)}</span>` : ""}
-    </div>`).join("")}
-    <button class="btn" id="run-btn">
-      <img src="img/icon_run.png" class="btn-icon" alt=""> Run
-    </button>`;
+    ${hasSchema
+      ? Object.entries(props).map(([k, v]) => `
+        <div class="field-row">
+          <label>${escHtml(k)}${required.has(k) ? ' <span class="field-required">*</span>' : ""}</label>
+          ${v.type === "integer" || v.type === "number"
+            ? `<input id="field-${escHtml(k)}" type="number" placeholder="${escHtml(v.description || v.type)}">`
+            : v.enum
+            ? `<select id="field-${escHtml(k)}">${v.enum.map(o => `<option value="${escHtml(o)}">${escHtml(o)}</option>`).join("")}</select>`
+            : `<input id="field-${escHtml(k)}" type="text" placeholder="${escHtml(v.description || v.type || "")}">`}
+          ${v.description ? `<span class="field-hint">${escHtml(v.description)}</span>` : ""}
+        </div>`).join("")
+      : `<div class="field-row">
+          <label>Your message</label>
+          <textarea id="run-user-msg" placeholder="Ask anything…" style="min-height:80px"></textarea>
+         </div>`}
+    <button class="btn primary" id="run-btn">▶ Run</button>`;
 
   document.getElementById("run-btn").addEventListener("click", async () => {
     const model = document.getElementById("run-model").value.trim();
     if (!model) { toast("Model required", "err"); return; }
+
     const payload = {};
     for (const k of Object.keys(props)) {
       const el = document.getElementById(`field-${k}`);
       if (!el) continue;
-      const raw = el.value;
       const t = props[k].type;
-      payload[k] = (t === "integer") ? parseInt(raw, 10) : (t === "number") ? parseFloat(raw) : raw;
+      payload[k] = (t === "integer") ? parseInt(el.value, 10) : (t === "number") ? parseFloat(el.value) : el.value;
     }
+
+    const userMsgEl = document.getElementById("run-user-msg");
+    const userMessage = userMsgEl?.value.trim() || undefined;
+
     document.getElementById("run-btn").disabled = true;
     document.getElementById("run-result").textContent = "Running…";
     document.getElementById("result-meta").textContent = "";
+
     try {
       const res = await api.post("/api/run", {
         prompt_id: id,
         payload,
         model_id: model,
         max_retries: 3,
+        ...(userMessage ? {user_message: userMessage} : {}),
       });
       const el = document.getElementById("run-result");
-      el.textContent = JSON.stringify(res.data ?? res.raw_output, null, 2);
+      el.textContent = typeof res.data === "string"
+        ? res.data
+        : JSON.stringify(res.data ?? res.raw_output, null, 2);
       el.className = "run-result " + (res.ok ? "ok" : "err");
       document.getElementById("result-meta").innerHTML =
         `<span class="${res.ok ? "badge ok" : "badge err"}">${res.ok ? "OK" : "FAIL"}</span>
@@ -292,14 +374,14 @@ async function runPage(id) {
 
 async function chainsPage() {
   render(`<h1>Chains</h1>
-<table class="prompt-table framed">
+<table class="prompt-table">
   <thead><tr><th>ID</th><th>Name</th><th>Steps</th><th></th></tr></thead>
-  <tbody id="chain-rows"><tr><td colspan="4" style="color:var(--ink-faded);padding:1.5rem">Loading…</td></tr></tbody>
+  <tbody id="chain-rows"><tr><td colspan="4" style="color:var(--text-dim);padding:1.5rem">Loading…</td></tr></tbody>
 </table>`);
 
   let chains = [];
   try { chains = await api.get("/api/chains"); } catch (e) {
-    document.getElementById("chain-rows").innerHTML = `<tr><td colspan="4" style="color:var(--danger)">${escHtml(e.message)}</td></tr>`;
+    document.getElementById("chain-rows").innerHTML = `<tr><td colspan="4" style="color:var(--err)">${escHtml(e.message)}</td></tr>`;
     return;
   }
 
@@ -311,12 +393,10 @@ async function chainsPage() {
   document.getElementById("chain-rows").innerHTML = chains.map(c => `
     <tr>
       <td><a class="prompt-id" href="#/chains/${escHtml(c.id)}">${escHtml(c.id)}</a></td>
-      <td>${escHtml(c.name || "—")}</td>
-      <td>${(c.steps || []).length}</td>
+      <td style="color:var(--text-2)">${escHtml(c.name || "—")}</td>
+      <td style="color:var(--text-dim)">${(c.steps || []).length}</td>
       <td><div class="actions">
-        <a class="btn btn-sm secondary" href="#/chains/${escHtml(c.id)}">
-          <img src="img/icon_chain.png" class="btn-icon" alt=""> View / Run
-        </a>
+        <a class="btn btn-sm secondary" href="#/chains/${escHtml(c.id)}">View / Run</a>
       </div></td>
     </tr>`).join("");
 }
@@ -335,11 +415,11 @@ async function chainDetailPage(id) {
   document.getElementById("main").innerHTML = `
 <a class="back" href="#/chains">← Chains</a>
 <h1>${escHtml(chain.name || chain.id)}</h1>
-${chain.description ? `<p style="color:var(--text-dim);margin-bottom:1rem">${escHtml(chain.description)}</p>` : ""}
+${chain.description ? `<p style="color:var(--text-2);margin-bottom:1rem;font-size:13px">${escHtml(chain.description)}</p>` : ""}
 <div class="run-layout">
   <div>
     <h2>Steps</h2>
-    <ul class="chain-steps" style="margin-bottom:1rem">
+    <ul class="chain-steps">
       ${steps.map((s, i) => `
         <li class="chain-step">
           <span class="step-num">${i + 1}</span>
@@ -347,16 +427,14 @@ ${chain.description ? `<p style="color:var(--text-dim);margin-bottom:1rem">${esc
             <div class="step-id">${escHtml(s.prompt_id)}</div>
             ${s.model ? `<div style="font-size:11px;color:var(--text-dim)">${escHtml(s.model)}</div>` : ""}
           </div>
-          ${s.output_as ? `<span class="step-arrow">→ <code>${escHtml(s.output_as)}</code></span>` : ""}
+          ${s.output_as ? `<span class="step-arrow">→ ${escHtml(s.output_as)}</span>` : ""}
         </li>`).join("")}
     </ul>
     <div class="field-row">
       <label>Initial Payload (JSON)</label>
-      <textarea class="mono" id="chain-payload" style="min-height:100px">{}</textarea>
+      <textarea class="mono" id="chain-payload" style="min-height:80px">{}</textarea>
     </div>
-    <button class="btn" id="chain-run-btn">
-      <img src="img/icon_run.png" class="btn-icon" alt=""> Run Chain
-    </button>
+    <button class="btn primary" id="chain-run-btn">▶ Run Chain</button>
   </div>
   <div>
     <div class="pane-header"><h2>Result</h2></div>
@@ -380,7 +458,7 @@ ${chain.description ? `<p style="color:var(--text-dim);margin-bottom:1rem">${esc
       document.getElementById("chain-meta").innerHTML =
         `<span class="${res.ok ? "badge ok" : "badge err"}">${res.ok ? "OK" : "FAIL"}</span>
          <span>steps: ${res.steps_run}</span>
-         ${res.failed_step ? `<span style="color:var(--danger)">failed at: ${escHtml(res.failed_step)}</span>` : ""}`;
+         ${res.failed_step ? `<span style="color:var(--err)">failed at: ${escHtml(res.failed_step)}</span>` : ""}`;
     } catch (e) {
       document.getElementById("chain-result").textContent = "Error: " + e.message;
       document.getElementById("chain-result").className = "run-result err";
