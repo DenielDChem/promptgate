@@ -66,6 +66,7 @@ def get_profile(name: str | None = None) -> dict:
         raise KeyError(f"Profile '{resolved}' not found. Available: {list(profiles)}")
     base = _default_profile()
     base.update({k: v for k, v in profiles[resolved].items() if v is not None})
+    base["_name"] = resolved
     logger.debug("Using profile '{}': db={}", resolved, base["db_path"])
     return base
 

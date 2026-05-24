@@ -431,35 +431,58 @@ def keys_rm(name: str) -> None:
 @main.command("run")
 @click.argument("prompt_id")
 @click.option("--payload", "-p", default="{}", help="JSON payload string.")
-@click.option("--model", "-m", required=True, help="LiteLLM model string (e.g. gpt-4o).")
+@click.option("--model", "-m", default=None, help="LiteLLM model string. Falls back to active profile default_model.")
 @click.option("--max-retries", default=3, show_default=True, help="Max LLM call attempts.")
 @click.option("--user-message", default=None, help="Custom user turn (default: serialised payload).")
-@click.option("--api-base", default=None, help="Custom LiteLLM api_base URL (e.g. https://routerai.ru/api/v1).")
-@click.option("--api-key", default=None, help="Override API key passed to LiteLLM.")
+@click.option("--api-base", default=None, help="Override api_base URL. Falls back to active profile litellm_api_base.")
+@click.option("--api-key", default=None, help="Override API key. Falls back to keystore key named after active profile.")
+@click.option("--profile", default=None, help="Profile name to use (default: active profile).")
 @click.pass_context
-def run_cmd(ctx: click.Context, prompt_id: str, payload: str, model: str, max_retries: int, user_message: str | None, api_base: str | None, api_key: str | None) -> None:
+def run_cmd(ctx: click.Context, prompt_id: str, payload: str, model: str | None, max_retries: int, user_message: str | None, api_base: str | None, api_key: str | None, profile: str | None) -> None:
     """Compile a prompt, call LLM, validate output, retry on failure.
+
+    Provider settings (api_base, api_key, model) resolve in this order:
+    CLI flag > active profile > environment variables.
+
+    API key is read from the keystore under the profile name:
+    ``pgate keys set <profile_name> <api_key>``
 
     Requires litellm: pip install pgate[litellm]
 
     Examples:
 
-        pgate run sales_v1 --model gpt-4o --payload '{"period": "2024-01"}'
+        pgate run sales_v1 --payload '{"period": "2024-01"}'
 
-        pgate run sales_v1 --model openai/gpt-5-mini --api-base https://routerai.ru/api/v1 --api-key sk-...
+        pgate run sales_v1 --model openrouter/openai/gpt-5-mini --profile routerai
     """
     try:
         from promptgate.runner import run as pg_run
     except ImportError as exc:
         raise click.ClickException("litellm not installed: pip install pgate[litellm]") from exc
 
-    data: dict = json.loads(payload)
+    from promptgate.profiles import get_profile
+    from promptgate.keystore import get_key
+
+    try:
+        prof = get_profile(profile)
+    except KeyError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    resolved_model = model or prof.get("default_model")
+    if not resolved_model:
+        raise click.ClickException("No model specified. Pass --model or set default_model in the active profile.")
+
+    resolved_api_base = api_base or prof.get("litellm_api_base")
+    resolved_api_key = api_key or get_key(prof.get("_name", profile or "default"))
+
     litellm_kwargs: dict = {}
-    if api_base:
-        litellm_kwargs["api_base"] = api_base
-    if api_key:
-        litellm_kwargs["api_key"] = api_key
-    result = pg_run(prompt_id, data, model, db_path=ctx.obj["db"], max_retries=max_retries, user_message=user_message, litellm_kwargs=litellm_kwargs or None)
+    if resolved_api_base:
+        litellm_kwargs["api_base"] = resolved_api_base
+    if resolved_api_key:
+        litellm_kwargs["api_key"] = resolved_api_key
+
+    data: dict = json.loads(payload)
+    result = pg_run(prompt_id, data, resolved_model, db_path=ctx.obj["db"], max_retries=max_retries, user_message=user_message, litellm_kwargs=litellm_kwargs or None)
     if result.ok:
         click.echo(json.dumps(result.data, ensure_ascii=False, indent=2))
     else:
@@ -585,20 +608,45 @@ def chain_rm(ctx: click.Context, chain_id: str) -> None:
 @click.argument("chain_id")
 @click.option("--payload", "-p", default="{}", help="JSON initial payload.")
 @click.option("--max-retries", default=3, show_default=True, help="Max LLM retries per step.")
+@click.option("--api-base", default=None, help="Override api_base URL. Falls back to active profile litellm_api_base.")
+@click.option("--api-key", default=None, help="Override API key. Falls back to keystore key named after active profile.")
+@click.option("--profile", default=None, help="Profile name to use (default: active profile).")
 @click.pass_context
-def chain_run(ctx: click.Context, chain_id: str, payload: str, max_retries: int) -> None:
+def chain_run(ctx: click.Context, chain_id: str, payload: str, max_retries: int, api_base: str | None, api_key: str | None, profile: str | None) -> None:
     """Run a chain with an initial payload.
+
+    Provider settings resolve from active profile (api_base, api_key).
+    Store API key with: ``pgate keys set <profile_name> <api_key>``
 
     Requires litellm: pip install pgate[litellm]
 
     Examples:
 
         pgate chain run my_chain --payload '{"topic": "AI"}'
+
+        pgate chain run my_chain --profile routerai --payload '{"topic": "AI"}'
     """
+    from promptgate.profiles import get_profile
+    from promptgate.keystore import get_key
+
+    try:
+        prof = get_profile(profile)
+    except KeyError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    resolved_api_base = api_base or prof.get("litellm_api_base")
+    resolved_api_key = api_key or get_key(prof.get("_name", profile or "default"))
+
+    litellm_kwargs: dict = {}
+    if resolved_api_base:
+        litellm_kwargs["api_base"] = resolved_api_base
+    if resolved_api_key:
+        litellm_kwargs["api_key"] = resolved_api_key
+
     data: dict = json.loads(payload)
     try:
         from promptgate.chains import run_chain
-        result = run_chain(chain_id, data, db_path=ctx.obj["db"], max_retries_per_step=max_retries)
+        result = run_chain(chain_id, data, db_path=ctx.obj["db"], max_retries_per_step=max_retries, litellm_kwargs=litellm_kwargs or None)
     except ImportError as exc:
         raise click.ClickException("litellm not installed: pip install pgate[litellm]") from exc
     if result.ok:
