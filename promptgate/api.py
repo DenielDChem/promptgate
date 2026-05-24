@@ -9,6 +9,8 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from promptgate.models_registry import list_models
+from promptgate.profiles import get_profile, list_profiles
 from promptgate.chains import (
     ChainConfig,
     delete_chain, get_chain, list_chains,
@@ -188,6 +190,28 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
         except ImportError as exc:
             raise HTTPException(501, str(exc)) from exc
         return {"ok": result.ok, "context": result.context, "failed_step": result.failed_step, "steps_run": result.steps_run}
+
+    # ── models + profile ──────────────────────────────────────────────────────
+
+    @app.get("/api/models")
+    def list_models_endpoint() -> list[str]:
+        """List all available model IDs (built-in + user-defined)."""
+        return list_models(include_custom=True)
+
+    @app.get("/api/profile")
+    def get_active_profile_endpoint() -> dict:
+        """Return the active profile config."""
+        try:
+            profiles = list_profiles()
+            active_name = next((name for name, is_def in profiles if is_def), "default")
+            profile = get_profile(active_name)
+            return {
+                "name": active_name,
+                "default_model": profile.get("default_model", ""),
+                "api_base": profile.get("litellm_api_base", ""),
+            }
+        except Exception:
+            return {"name": "default", "default_model": "", "api_base": ""}
 
     # ── static UI ─────────────────────────────────────────────────────────────
 

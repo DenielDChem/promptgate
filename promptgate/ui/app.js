@@ -311,20 +311,34 @@ async function runPage(id) {
   </div>
 </div>`);
 
-  let prompt;
+  let prompt, models = [], profile = {name: "default", default_model: "", api_base: ""};
   try {
-    prompt = await api.get(`/api/prompts/${encodeURIComponent(id)}`);
+    [prompt, models, profile] = await Promise.all([
+      api.get(`/api/prompts/${encodeURIComponent(id)}`),
+      api.get("/api/models").catch(() => []),
+      api.get("/api/profile").catch(() => ({name: "default", default_model: "", api_base: ""})),
+    ]);
   } catch (e) { toast(e.message, "err"); return; }
 
   const schema   = prompt.schema_ || {};
   const props    = schema.properties || {};
   const required = new Set(schema.required || []);
   const hasSchema = Object.keys(props).length > 0;
+  const defaultModel = prompt.model || profile.default_model || "";
+
+  const modelOptions = models.length
+    ? `<datalist id="model-list">${models.map(m => `<option value="${escHtml(m)}">`).join("")}</datalist>`
+    : "";
+  const profileHint = profile.api_base
+    ? `Profile: <strong>${escHtml(profile.name)}</strong> · api_base: <code>${escHtml(profile.api_base)}</code>`
+    : `Profile: <strong>${escHtml(profile.name)}</strong> · uses env vars (OPENAI_API_KEY etc.)`;
 
   document.getElementById("run-form-area").innerHTML = `
+    ${modelOptions}
     <div class="field-row">
       <label>Model <span class="field-required">*</span></label>
-      <input id="run-model" value="${escHtml(prompt.model || "")}" placeholder="openai/gpt-4o-mini">
+      <input id="run-model" value="${escHtml(defaultModel)}" placeholder="openai/gpt-4o-mini" list="model-list">
+      <span class="field-hint">${profileHint}</span>
     </div>
     ${hasSchema
       ? Object.entries(props).map(([k, v]) => `
