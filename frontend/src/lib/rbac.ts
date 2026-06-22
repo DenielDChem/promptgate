@@ -1,11 +1,14 @@
 // Single source of truth for UI role-based access (spec §12, team-lead matrix).
 //
 //   admin     → all modules, full access
-//   prompter  → My Prompts, Templates, Validator, Trash (no Admin / Logs)
-//   validator → Validator (full) + My Prompts (read-only)
-//   guest     → My Prompts (read-only) only
+//   prompter  → My Prompts, Templates, Validator, Quality, Trash (no Admin / Logs)
+//   validator → Validator (full) + Quality + My Prompts (read-only)
+//   guest     → My Prompts (read-only) only — no Validator run, no Quality
 //
 // Any module not listed for a role is implicitly hidden.
+//
+// `validate.run` maps to FULL access on the `validator` module; `stats.view_own`
+// maps to visibility of the `quality` module. Guests get neither.
 
 import type { ModuleAccess, ModuleId, Role } from './types';
 
@@ -20,6 +23,7 @@ const MATRIX: Matrix = {
     'my-prompts': FULL,
     templates: FULL,
     validator: FULL,
+    quality: FULL,
     admin: FULL,
     logs: FULL,
     trash: FULL,
@@ -28,10 +32,12 @@ const MATRIX: Matrix = {
     'my-prompts': FULL,
     templates: FULL,
     validator: FULL,
+    quality: FULL,
     trash: FULL,
   },
   validator: {
     validator: FULL,
+    quality: FULL,
     'my-prompts': READ_ONLY,
   },
   guest: {
@@ -44,10 +50,16 @@ export const ALL_MODULES: ModuleId[] = [
   'my-prompts',
   'templates',
   'validator',
+  'quality',
   'admin',
   'logs',
   'trash',
 ];
+
+/** Whether a role may launch deep validation runs (spec `validate.run`). */
+export function canRunValidation(role: Role): boolean {
+  return !moduleAccess(role, 'validator').readOnly && canAccess(role, 'validator');
+}
 
 /** Resolve a role's access to a specific module. */
 export function moduleAccess(role: Role, module: ModuleId): ModuleAccess {

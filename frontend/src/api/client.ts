@@ -8,7 +8,12 @@ import type {
   PromptSavePayload,
   PromptSummary,
   PromptVersion,
+  QualityRow,
+  QualityScore,
   User,
+  ValidatePayload,
+  ValidationRun,
+  ValidationRunSummary,
 } from '@/lib/types';
 
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? '';
@@ -153,4 +158,37 @@ export const promptsApi = {
 export const lintApi = {
   check: (template: string, token: string) =>
     request<LintResult>('/lint', { method: 'POST', body: { template }, token }),
+};
+
+// ─── Deep validation + quality (P3 §4, §8) ───────────────────────────────────
+
+export const validationApi = {
+  /** Available models for the picker. */
+  models: (token: string) => request<string[]>('/models', { token }),
+
+  /** Kick off a deep validation run for a prompt. May take a while. */
+  run: (id: string, payload: ValidatePayload, token: string) =>
+    request<ValidationRun>(`/prompts/${encodeURIComponent(id)}/validate`, {
+      method: 'POST',
+      body: payload,
+      token,
+    }),
+
+  /** Aggregate quality for one prompt (404 → never validated). */
+  quality: (id: string, token: string) =>
+    request<QualityScore>(`/prompts/${encodeURIComponent(id)}/quality`, { token }),
+
+  /** Past validation runs for one prompt (newest first). */
+  runs: (id: string, token: string) =>
+    request<ValidationRunSummary[]>(
+      `/prompts/${encodeURIComponent(id)}/validations`,
+      { token },
+    ),
+
+  /** Full run incl. graded cases. */
+  runDetail: (runId: string, token: string) =>
+    request<ValidationRun>(`/validations/${encodeURIComponent(runId)}`, { token }),
+
+  /** Quality dashboard across the caller's prompts. */
+  dashboard: (token: string) => request<QualityRow[]>('/quality', { token }),
 };
