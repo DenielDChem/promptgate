@@ -28,6 +28,7 @@ from promptgate.migrations import run_migrations
 from promptgate.prompts_service import PromptMetaStore
 from promptgate.quality import lint_template
 from promptgate.quality.store import QualityStore
+from promptgate.jobs.store import JobStore
 
 
 def _cors_origins() -> list[str]:
@@ -94,14 +95,25 @@ class _ValidateRunIn(BaseModel):
     repeats: int = 3
 
 
-def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
+class _JobCreateIn(BaseModel):
+    type: str                       # validation | generation | mass_test
+    prompt_id: str | None = None
+    model_id: str | None = None
+    priority: str = "medium"        # high | medium | low
+    params: dict = {}
+
+
+def make_app(db_path: str | Path = _DEFAULT_DB_PATH, start_worker: bool = False) -> FastAPI:
     """Create and return a configured FastAPI application.
 
     Args:
         db_path: Path to SQLite database. Injected into all route handlers.
+        start_worker: Start the in-process task-queue worker thread on startup.
+            Off by default (tests drain jobs synchronously); ``pgate serve``
+            turns it on.
 
     Returns:
-        FastAPI app with CRUD, search, compile, run, and chain endpoints.
+        FastAPI app with CRUD, search, compile, run, chain, and queue endpoints.
 
     Examples:
         >>> app = make_app(":memory:")
@@ -130,8 +142,23 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
     require_edit = require_permission("prompt.edit_own")
     require_delete = require_permission("prompt.delete_own")
     require_validate = require_permission("validate.run")
+    require_queue = require_permission("admin.queue")
     meta = PromptMetaStore(db)
     quality_store = QualityStore(db)
+    job_store = JobStore(db)
+
+    if start_worker:
+        from promptgate.jobs.handlers import default_handlers
+        from promptgate.jobs.worker import JobWorker
+        _worker = JobWorker(db, default_handlers(db))
+
+        @app.on_event("startup")
+        def _start_worker() -> None:  # pragma: no cover - runtime only
+            _worker.start()
+
+        @app.on_event("shutdown")
+        def _stop_worker() -> None:  # pragma: no cover - runtime only
+            _worker.stop()
 
     def _backend() -> SQLiteBackend:
         b = SQLiteBackend(db)
@@ -313,6 +340,41 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
             row["name"] = names.get(pid, pid)
             out.append(row)
         return out
+
+    # ── task queue (P4, admin-only) ─────────────────────────────────────────────
+
+    @app.post("/api/jobs", status_code=201)
+    def create_job(body: _JobCreateIn, admin: dict = Depends(require_queue)) -> dict:
+        if body.type not in ("validation", "generation", "mass_test"):
+            raise HTTPException(422, f"Unknown job type '{body.type}'")
+        if body.priority not in ("high", "medium", "low"):
+            raise HTTPException(422, "priority must be high|medium|low")
+        return job_store.create(
+            body.type, prompt_id=body.prompt_id, model_id=body.model_id,
+            params=body.params, priority=body.priority, created_by=admin["id"],
+        )
+
+    @app.get("/api/jobs")
+    def list_jobs(status: str | None = None, _: dict = Depends(require_queue)) -> list[dict]:
+        return job_store.list(status)
+
+    @app.get("/api/jobs/summary")
+    def jobs_summary(_: dict = Depends(require_queue)) -> dict:
+        return job_store.summary()
+
+    @app.get("/api/jobs/{job_id}")
+    def get_job(job_id: int, _: dict = Depends(require_queue)) -> dict:
+        job = job_store.get(job_id)
+        if job is None:
+            raise HTTPException(404, f"Job {job_id} not found")
+        return job
+
+    @app.post("/api/jobs/{job_id}/cancel")
+    def cancel_job(job_id: int, _: dict = Depends(require_queue)) -> dict:
+        status = job_store.request_cancel(job_id)
+        if status is None:
+            raise HTTPException(409, "Job not found or already finished")
+        return {"ok": True, "status": status}
 
     @app.get("/api/search")
     def search(q: str, limit: int = 5, user: dict = Depends(get_current_user)) -> list[dict]:

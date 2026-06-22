@@ -138,6 +138,33 @@ _MIGRATIONS: list[tuple[str, str]] = [
         CREATE INDEX IF NOT EXISTS idx_vc_run    ON validation_cases(run_id);
         """,
     ),
+    (
+        "0004_jobs",
+        # P4: async task queue. A DB-backed job table; an in-process worker
+        # claims queued jobs and updates progress. cancel_requested is a soft
+        # flag the running handler polls between steps.
+        """
+        CREATE TABLE IF NOT EXISTS jobs (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            type            TEXT    NOT NULL,                  -- validation|generation|mass_test
+            status          TEXT    NOT NULL DEFAULT 'queued', -- queued|running|completed|failed|cancelled
+            priority        TEXT    NOT NULL DEFAULT 'medium', -- high|medium|low
+            prompt_id       TEXT,
+            model_id        TEXT,
+            params_json     TEXT    NOT NULL DEFAULT '{}',
+            progress        INTEGER NOT NULL DEFAULT 0,
+            total           INTEGER NOT NULL DEFAULT 0,
+            result_json     TEXT,
+            error           TEXT,
+            cancel_requested INTEGER NOT NULL DEFAULT 0,
+            created_by      INTEGER,
+            created_at      INTEGER NOT NULL,
+            updated_at      INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+        """,
+    ),
 ]
 
 

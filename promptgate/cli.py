@@ -515,7 +515,7 @@ def serve_cmd(ctx: click.Context, host: str, port: int, open_browser: bool) -> N
     except ImportError as exc:
         raise click.ClickException("fastapi/uvicorn not installed: pip install pgate[serve]") from exc
 
-    app = make_app(ctx.obj["db"])
+    app = make_app(ctx.obj["db"], start_worker=True)
     ui_url = f"http://{host}:{port}/ui/"
     click.echo(f"PGate API  → http://{host}:{port}")
     click.echo(f"PGate UI   → {ui_url}")
