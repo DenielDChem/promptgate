@@ -25,6 +25,8 @@ from promptgate.validator import validate_output
 from promptgate.auth import build_auth_router
 from promptgate.auth.deps import make_auth_deps
 from promptgate.migrations import run_migrations
+from promptgate.prompts_service import PromptMetaStore
+from promptgate.quality import lint_template
 
 
 def _cors_origins() -> list[str]:
@@ -72,6 +74,14 @@ class _KeyIn(BaseModel):
     value: str
 
 
+class _LintIn(BaseModel):
+    template: str
+
+
+class _RollbackIn(BaseModel):
+    version_no: int
+
+
 def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
     """Create and return a configured FastAPI application.
 
@@ -104,40 +114,121 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
     get_current_user, require_permission = make_auth_deps(db)
     _auth = [Depends(get_current_user)]
     _admin_env = [Depends(require_permission("admin.env"))]
+    require_create = require_permission("prompt.create")
+    require_edit = require_permission("prompt.edit_own")
+    meta = PromptMetaStore(db)
 
     def _backend() -> SQLiteBackend:
         b = SQLiteBackend(db)
         b.init()
         return b
 
+    def _prompt_dict(prompt: PromptConfig) -> dict:
+        """PromptConfig + its ownership/version metadata."""
+        d = prompt.model_dump(by_alias=True)
+        m = meta.get_meta(prompt.id)
+        d["status"] = m["status"] if m else "draft"
+        d["current_version"] = m["current_version"] if m else 1
+        d["owner_id"] = m["owner_id"] if m else None
+        return d
+
     # ── prompts ───────────────────────────────────────────────────────────────
 
-    @app.get("/api/prompts", dependencies=_auth)
-    def list_prompts() -> list[dict]:
-        """List all stored prompts."""
-        return [p.model_dump(by_alias=True) for p in _backend().list_all()]
+    @app.get("/api/prompts")
+    def list_prompts(user: dict = Depends(get_current_user)) -> list[dict]:
+        """List prompts the caller may see (admins see all)."""
+        return [
+            _prompt_dict(p) for p in _backend().list_all()
+            if meta.can_read(p.id, user)
+        ]
 
-    @app.get("/api/prompts/{prompt_id}", dependencies=_auth)
-    def get_prompt(prompt_id: str) -> dict:
-        """Get a single prompt by ID."""
+    @app.get("/api/prompts/{prompt_id}")
+    def get_prompt(prompt_id: str, user: dict = Depends(get_current_user)) -> dict:
+        """Get a single prompt by ID (must be readable by the caller)."""
         p = _backend().get(prompt_id)
         if p is None:
             raise HTTPException(404, f"Prompt '{prompt_id}' not found")
-        return p.model_dump(by_alias=True)
+        if not meta.can_read(prompt_id, user):
+            raise HTTPException(403, "You do not have access to this prompt")
+        return _prompt_dict(p)
 
-    @app.post("/api/prompts", status_code=201, dependencies=_auth)
-    def create_prompt(body: dict) -> dict:
-        """Add or update a prompt from a dict (YAML-equivalent fields)."""
+    @app.post("/api/prompts", status_code=201)
+    def create_prompt(body: dict, user: dict = Depends(require_create)) -> dict:
+        """Create or update a prompt; records a new version snapshot."""
+        message = ""
+        if isinstance(body, dict):
+            message = str(body.pop("message", "") or "")
         prompt = PromptConfig.model_validate(body)
+        if not meta.can_write(prompt.id, user):
+            raise HTTPException(403, "You do not own this prompt")
         _backend().upsert(prompt)
-        return {"ok": True, "id": prompt.id}
+        version = meta.record_version(
+            prompt.id, prompt.model_dump(by_alias=True), author_id=user["id"], message=message,
+        )
+        return {"ok": True, "id": prompt.id, "version": version}
 
-    @app.delete("/api/prompts/{prompt_id}", dependencies=_auth)
-    def delete_prompt(prompt_id: str) -> dict:
-        """Delete a prompt by ID."""
+    @app.delete("/api/prompts/{prompt_id}")
+    def delete_prompt(prompt_id: str, user: dict = Depends(get_current_user)) -> dict:
+        """Delete a prompt and its version history (must be owner/admin)."""
+        if not meta.can_write(prompt_id, user):
+            raise HTTPException(403, "You do not own this prompt")
         if not _backend().delete(prompt_id):
             raise HTTPException(404, f"Prompt '{prompt_id}' not found")
+        meta.delete_all(prompt_id)
         return {"ok": True}
+
+    # ── prompt versions + publish ───────────────────────────────────────────────
+
+    @app.get("/api/prompts/{prompt_id}/versions")
+    def list_prompt_versions(prompt_id: str, user: dict = Depends(get_current_user)) -> list[dict]:
+        if not meta.can_read(prompt_id, user):
+            raise HTTPException(403, "You do not have access to this prompt")
+        return meta.list_versions(prompt_id)
+
+    @app.get("/api/prompts/{prompt_id}/versions/{version_no}")
+    def get_prompt_version(
+        prompt_id: str, version_no: int, user: dict = Depends(get_current_user),
+    ) -> dict:
+        if not meta.can_read(prompt_id, user):
+            raise HTTPException(403, "You do not have access to this prompt")
+        v = meta.get_version(prompt_id, version_no)
+        if v is None:
+            raise HTTPException(404, f"Version {version_no} not found for '{prompt_id}'")
+        return v
+
+    @app.post("/api/prompts/{prompt_id}/rollback")
+    def rollback_prompt(
+        prompt_id: str, body: _RollbackIn, user: dict = Depends(require_edit),
+    ) -> dict:
+        """Restore a past version as a new current version."""
+        if not meta.can_write(prompt_id, user):
+            raise HTTPException(403, "You do not own this prompt")
+        v = meta.get_version(prompt_id, body.version_no)
+        if v is None:
+            raise HTTPException(404, f"Version {body.version_no} not found")
+        prompt = PromptConfig.model_validate(v["body"])
+        _backend().upsert(prompt)
+        version = meta.record_version(
+            prompt_id, v["body"], author_id=user["id"],
+            message=f"rollback to v{body.version_no}",
+        )
+        return {"ok": True, "version": version}
+
+    @app.post("/api/prompts/{prompt_id}/publish")
+    def publish_prompt(prompt_id: str, user: dict = Depends(require_edit)) -> dict:
+        if not meta.can_write(prompt_id, user):
+            raise HTTPException(403, "You do not own this prompt")
+        if _backend().get(prompt_id) is None:
+            raise HTTPException(404, f"Prompt '{prompt_id}' not found")
+        meta.set_status(prompt_id, "published")
+        return {"ok": True, "status": "published"}
+
+    # ── live lint (static 3-type validation) ────────────────────────────────────
+
+    @app.post("/api/lint")
+    def lint_endpoint(body: _LintIn, _: dict = Depends(get_current_user)) -> dict:
+        """Static, no-LLM prompt linting → stylistic/determinism/hallucination findings."""
+        return {"findings": [f.to_dict() for f in lint_template(body.template)]}
 
     @app.get("/api/search", dependencies=_auth)
     def search(q: str, limit: int = 5) -> list[dict]:
@@ -147,9 +238,11 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
 
     # ── compile ───────────────────────────────────────────────────────────────
 
-    @app.post("/api/compile", dependencies=_auth)
-    def compile_prompt_endpoint(body: _CompileIn) -> dict:
+    @app.post("/api/compile")
+    def compile_prompt_endpoint(body: _CompileIn, user: dict = Depends(get_current_user)) -> dict:
         """Compile a prompt contract (cached)."""
+        if not meta.can_read(body.prompt_id, user):
+            raise HTTPException(403, "You do not have access to this prompt")
         try:
             contract = get_or_compile(body.prompt_id, body.payload, db_path=db, model_id=body.model_id)
         except KeyError as exc:
@@ -158,10 +251,12 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
 
     # ── run ───────────────────────────────────────────────────────────────────
 
-    @app.post("/api/run", dependencies=_auth)
-    def run_prompt(body: _RunIn) -> dict:
+    @app.post("/api/run")
+    def run_prompt(body: _RunIn, user: dict = Depends(get_current_user)) -> dict:
         """Compile, call LLM, validate, retry — return result."""
         import os
+        if not meta.can_read(body.prompt_id, user):
+            raise HTTPException(403, "You do not have access to this prompt")
         try:
             from promptgate.runner import run as pg_run
         except ImportError as exc:
@@ -189,9 +284,11 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
 
     # ── validate ──────────────────────────────────────────────────────────────
 
-    @app.post("/api/validate", dependencies=_auth)
-    def validate_endpoint(body: _ValidateIn) -> dict:
+    @app.post("/api/validate")
+    def validate_endpoint(body: _ValidateIn, user: dict = Depends(get_current_user)) -> dict:
         """Validate raw LLM output against a prompt's schema."""
+        if not meta.can_read(body.prompt_id, user):
+            raise HTTPException(403, "You do not have access to this prompt")
         try:
             contract = get_or_compile(body.prompt_id, body.payload, db_path=db, model_id=body.model_id)
         except KeyError as exc:

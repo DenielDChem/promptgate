@@ -62,6 +62,35 @@ _MIGRATIONS: list[tuple[str, str]] = [
         CREATE INDEX IF NOT EXISTS idx_invites_status  ON invites(status);
         """,
     ),
+    (
+        "0002_prompt_meta_versions",
+        # Ownership + versioning live in side tables keyed by prompt_id, so the
+        # prompts/FTS schema owned by storage.SQLiteBackend is left untouched.
+        """
+        CREATE TABLE IF NOT EXISTS prompt_meta (
+            prompt_id       TEXT    PRIMARY KEY,
+            owner_id        INTEGER,                          -- NULL = legacy/shared
+            status          TEXT    NOT NULL DEFAULT 'draft',  -- draft|published
+            current_version INTEGER NOT NULL DEFAULT 1,
+            created_at      INTEGER NOT NULL,
+            updated_at      INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS prompt_versions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            prompt_id   TEXT    NOT NULL,
+            version_no  INTEGER NOT NULL,
+            body_json   TEXT    NOT NULL,                      -- full PromptConfig snapshot
+            author_id   INTEGER,
+            message     TEXT    NOT NULL DEFAULT '',
+            created_at  INTEGER NOT NULL,
+            UNIQUE (prompt_id, version_no)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pv_prompt ON prompt_versions(prompt_id);
+        CREATE INDEX IF NOT EXISTS idx_pm_owner  ON prompt_meta(owner_id);
+        """,
+    ),
 ]
 
 

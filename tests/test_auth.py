@@ -30,7 +30,7 @@ def client(tmp_path):
 # ── migrations ────────────────────────────────────────────────────────────────
 def test_migrations_idempotent(tmp_path):
     p = tmp_path / "m.sqlite"
-    assert run_migrations(p) == ["0001_auth"]
+    assert run_migrations(p) == ["0001_auth", "0002_prompt_meta_versions"]
     assert run_migrations(p) == []
 
 
