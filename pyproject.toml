@@ -37,6 +37,11 @@ serve = [
     "fastapi>=0.100",
     "uvicorn>=0.20",
     "aiofiles>=23.0",
+    # platform auth (P1): JWT sessions, bcrypt hashing, TOTP 2FA, email validation
+    "bcrypt>=4.0",
+    "PyJWT>=2.8",
+    "pyotp>=2.9",
+    "email-validator>=2.0",
 ]
 postgres = [
     "psycopg2-binary>=2.9",

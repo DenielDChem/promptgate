@@ -791,3 +791,103 @@ def purge_cmd(ctx: click.Context, days: int) -> None:
     """
     deleted = purge_stale(max_age_seconds=days * 86400)
     click.echo(f"Deleted {deleted} stale contract file(s).")
+
+
+@main.command("migrate")
+@click.pass_context
+def migrate_cmd(ctx: click.Context) -> None:
+    """Apply pending platform schema migrations (users, invites, audit…).
+
+    Examples:
+
+        pgate migrate
+    """
+    from promptgate.migrations import run_migrations
+    applied = run_migrations(ctx.obj["db"])
+    if applied:
+        click.echo("Applied: " + ", ".join(applied))
+    else:
+        click.echo("Already up to date.")
+
+
+@main.group("admin")
+def admin_group() -> None:
+    """Platform administration: bootstrap admins, manage invites."""
+
+
+@admin_group.command("create-admin")
+@click.option("--username", required=True, help="Admin username.")
+@click.option("--email", required=True, help="Admin email.")
+@click.option("--password", default=None, help="Password (prompted securely if omitted).")
+@click.pass_context
+def create_admin(ctx: click.Context, username: str, email: str, password: str | None) -> None:
+    """Create an admin account (bootstrap the platform).
+
+    Examples:
+
+        pgate admin create-admin --username alex --email alex@example.com
+    """
+    from promptgate.migrations import run_migrations
+    from promptgate.auth.db import AuthDB, AuthError
+
+    run_migrations(ctx.obj["db"])
+    if password is None:
+        password = click.prompt("Password", hide_input=True, confirmation_prompt=True)
+    if len(password) < 8:
+        raise click.ClickException("Password must be at least 8 characters.")
+    try:
+        user = AuthDB(ctx.obj["db"]).create_user(username, email, password, "admin")
+    except AuthError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Created admin '{user['username']}' (id={user['id']}).")
+
+
+@admin_group.command("invite")
+@click.option("--role", default="prompter",
+              type=click.Choice(["admin", "prompter", "validator", "guest"]),
+              show_default=True, help="Role granted by this invite.")
+@click.option("--expires-hours", default=720, show_default=True,
+              help="Validity window in hours (0 = never expires).")
+@click.option("--multi", is_flag=True, help="Reusable invite (default is one-time).")
+@click.pass_context
+def admin_invite(ctx: click.Context, role: str, expires_hours: int, multi: bool) -> None:
+    """Generate an invite token.
+
+    Examples:
+
+        pgate admin invite --role prompter
+        pgate admin invite --role validator --expires-hours 168
+    """
+    from promptgate.migrations import run_migrations
+    from promptgate.auth.db import AuthDB
+
+    run_migrations(ctx.obj["db"])
+    invite = AuthDB(ctx.obj["db"]).create_invite(
+        role=role, created_by=None,
+        expires_hours=expires_hours or None, one_time=not multi,
+    )
+    click.echo(f"Invite token ({role}): {invite['token']}")
+    click.echo(f"Register link: /#/register?invite={invite['token']}")
+
+
+@admin_group.command("requests")
+@click.option("--status", default="pending", help="Filter by status (pending|approved|rejected|all).")
+@click.pass_context
+def admin_requests(ctx: click.Context, status: str) -> None:
+    """List registration requests.
+
+    Examples:
+
+        pgate admin requests
+        pgate admin requests --status all
+    """
+    from promptgate.migrations import run_migrations
+    from promptgate.auth.db import AuthDB
+
+    run_migrations(ctx.obj["db"])
+    rows = AuthDB(ctx.obj["db"]).list_registration_requests(None if status == "all" else status)
+    if not rows:
+        click.echo("No registration requests.")
+        return
+    for r in rows:
+        click.echo(f"  #{r['id']}  {r['email']:<30} [{r['status']}]  {r['reason'][:40]}")

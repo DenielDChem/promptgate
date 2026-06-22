@@ -1,9 +1,10 @@
 """FastAPI REST server for pgate."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -21,6 +22,21 @@ from promptgate.models import PromptConfig
 from promptgate.router import search as pg_search
 from promptgate.storage import SQLiteBackend
 from promptgate.validator import validate_output
+from promptgate.auth import build_auth_router
+from promptgate.auth.deps import make_auth_deps
+from promptgate.migrations import run_migrations
+
+
+def _cors_origins() -> list[str]:
+    """Allowed CORS origins. Override with PROMPTGATE_CORS_ORIGINS (comma-separated).
+
+    Defaults to the local Vite dev server. The production UI is served
+    same-origin by this app, so it needs no CORS entry.
+    """
+    raw = os.environ.get("PROMPTGATE_CORS_ORIGINS")
+    if raw:
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    return ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 
 # ── request body models (module-level so FastAPI schema inspection works) ─────
@@ -71,8 +87,23 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
         'PGate API'
     """
     app = FastAPI(title="PGate API", version="0.3.0", description="Prompt ORM REST API")
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins(),
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
     db = Path(db_path)
+
+    # Platform schema (users, invites, audit…) — idempotent, runs on app creation.
+    run_migrations(db)
+    app.include_router(build_auth_router(db))
+
+    # Auth dependencies for the data API. `_auth` = any logged-in user;
+    # `_admin_env` = admin-only (key vault). Fine-grained ownership lands in P2.
+    get_current_user, require_permission = make_auth_deps(db)
+    _auth = [Depends(get_current_user)]
+    _admin_env = [Depends(require_permission("admin.env"))]
 
     def _backend() -> SQLiteBackend:
         b = SQLiteBackend(db)
@@ -81,12 +112,12 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
 
     # ── prompts ───────────────────────────────────────────────────────────────
 
-    @app.get("/api/prompts")
+    @app.get("/api/prompts", dependencies=_auth)
     def list_prompts() -> list[dict]:
         """List all stored prompts."""
         return [p.model_dump(by_alias=True) for p in _backend().list_all()]
 
-    @app.get("/api/prompts/{prompt_id}")
+    @app.get("/api/prompts/{prompt_id}", dependencies=_auth)
     def get_prompt(prompt_id: str) -> dict:
         """Get a single prompt by ID."""
         p = _backend().get(prompt_id)
@@ -94,21 +125,21 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
             raise HTTPException(404, f"Prompt '{prompt_id}' not found")
         return p.model_dump(by_alias=True)
 
-    @app.post("/api/prompts", status_code=201)
+    @app.post("/api/prompts", status_code=201, dependencies=_auth)
     def create_prompt(body: dict) -> dict:
         """Add or update a prompt from a dict (YAML-equivalent fields)."""
         prompt = PromptConfig.model_validate(body)
         _backend().upsert(prompt)
         return {"ok": True, "id": prompt.id}
 
-    @app.delete("/api/prompts/{prompt_id}")
+    @app.delete("/api/prompts/{prompt_id}", dependencies=_auth)
     def delete_prompt(prompt_id: str) -> dict:
         """Delete a prompt by ID."""
         if not _backend().delete(prompt_id):
             raise HTTPException(404, f"Prompt '{prompt_id}' not found")
         return {"ok": True}
 
-    @app.get("/api/search")
+    @app.get("/api/search", dependencies=_auth)
     def search(q: str, limit: int = 5) -> list[dict]:
         """Full-text search over prompts."""
         results = pg_search(q, db_path=db, limit=limit)
@@ -116,7 +147,7 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
 
     # ── compile ───────────────────────────────────────────────────────────────
 
-    @app.post("/api/compile")
+    @app.post("/api/compile", dependencies=_auth)
     def compile_prompt_endpoint(body: _CompileIn) -> dict:
         """Compile a prompt contract (cached)."""
         try:
@@ -127,7 +158,7 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
 
     # ── run ───────────────────────────────────────────────────────────────────
 
-    @app.post("/api/run")
+    @app.post("/api/run", dependencies=_auth)
     def run_prompt(body: _RunIn) -> dict:
         """Compile, call LLM, validate, retry — return result."""
         import os
@@ -158,7 +189,7 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
 
     # ── validate ──────────────────────────────────────────────────────────────
 
-    @app.post("/api/validate")
+    @app.post("/api/validate", dependencies=_auth)
     def validate_endpoint(body: _ValidateIn) -> dict:
         """Validate raw LLM output against a prompt's schema."""
         try:
@@ -171,12 +202,12 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
 
     # ── chains ────────────────────────────────────────────────────────────────
 
-    @app.get("/api/chains")
+    @app.get("/api/chains", dependencies=_auth)
     def list_chains_endpoint() -> list[dict]:
         """List all stored chains."""
         return [c.model_dump() for c in list_chains(db)]
 
-    @app.get("/api/chains/{chain_id}")
+    @app.get("/api/chains/{chain_id}", dependencies=_auth)
     def get_chain_endpoint(chain_id: str) -> dict:
         """Get a chain by ID."""
         c = get_chain(chain_id, db)
@@ -184,21 +215,21 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
             raise HTTPException(404, f"Chain '{chain_id}' not found")
         return c.model_dump()
 
-    @app.post("/api/chains", status_code=201)
+    @app.post("/api/chains", status_code=201, dependencies=_auth)
     def create_chain(body: dict) -> dict:
         """Add or update a chain."""
         chain = ChainConfig.model_validate(body)
         upsert_chain(chain, db)
         return {"ok": True, "id": chain.id}
 
-    @app.delete("/api/chains/{chain_id}")
+    @app.delete("/api/chains/{chain_id}", dependencies=_auth)
     def delete_chain_endpoint(chain_id: str) -> dict:
         """Delete a chain by ID."""
         if not delete_chain(chain_id, db):
             raise HTTPException(404, f"Chain '{chain_id}' not found")
         return {"ok": True}
 
-    @app.post("/api/chains/{chain_id}/run")
+    @app.post("/api/chains/{chain_id}/run", dependencies=_auth)
     def run_chain_endpoint(chain_id: str, body: _ChainRunIn) -> dict:
         """Run a chain with an initial payload."""
         try:
@@ -211,12 +242,12 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
 
     # ── models + profile ──────────────────────────────────────────────────────
 
-    @app.get("/api/models")
+    @app.get("/api/models", dependencies=_auth)
     def list_models_endpoint() -> list[str]:
         """List all available model IDs (built-in + user-defined)."""
         return list_models(include_custom=True)
 
-    @app.get("/api/profile")
+    @app.get("/api/profile", dependencies=_auth)
     def get_active_profile_endpoint() -> dict:
         """Return the active profile config."""
         try:
@@ -233,7 +264,7 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
 
     # ── keys ──────────────────────────────────────────────────────────────────
 
-    @app.get("/api/keys")
+    @app.get("/api/keys", dependencies=_admin_env)
     def list_keys_endpoint() -> list[str]:
         """List stored API key names (values are never returned)."""
         try:
@@ -242,7 +273,7 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
         except Exception:
             return []
 
-    @app.post("/api/keys", status_code=201)
+    @app.post("/api/keys", status_code=201, dependencies=_admin_env)
     def set_key_endpoint(body: _KeyIn) -> dict:
         """Store or update an API key (encrypted on disk)."""
         try:
@@ -254,7 +285,7 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
         set_key(body.name, body.value)
         return {"ok": True, "name": body.name}
 
-    @app.delete("/api/keys/{name}")
+    @app.delete("/api/keys/{name}", dependencies=_admin_env)
     def delete_key_endpoint(name: str) -> dict:
         """Delete a stored API key."""
         try:

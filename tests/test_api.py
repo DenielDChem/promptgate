@@ -18,7 +18,14 @@ from promptgate.api import make_app
 def client(tmp_path) -> TestClient:
     db = tmp_path / "test.sqlite"
     app = make_app(db)
-    return TestClient(app)
+    c = TestClient(app)
+    # All data endpoints now require auth — attach an admin token directly
+    # (minted, not via /login, to avoid the login rate limiter across tests).
+    from promptgate.auth.db import AuthDB
+    from promptgate.auth.security import create_access_token
+    u = AuthDB(db).create_user("tester", "tester@example.com", "testpass1", "admin")
+    c.headers.update({"Authorization": f"Bearer {create_access_token(sub=u['id'], role='admin')}"})
+    return c
 
 
 def _sample_prompt() -> dict:
