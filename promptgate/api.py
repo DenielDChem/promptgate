@@ -116,6 +116,7 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
     _admin_env = [Depends(require_permission("admin.env"))]
     require_create = require_permission("prompt.create")
     require_edit = require_permission("prompt.edit_own")
+    require_delete = require_permission("prompt.delete_own")
     meta = PromptMetaStore(db)
 
     def _backend() -> SQLiteBackend:
@@ -168,7 +169,7 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
         return {"ok": True, "id": prompt.id, "version": version}
 
     @app.delete("/api/prompts/{prompt_id}")
-    def delete_prompt(prompt_id: str, user: dict = Depends(get_current_user)) -> dict:
+    def delete_prompt(prompt_id: str, user: dict = Depends(require_delete)) -> dict:
         """Delete a prompt and its version history (must be owner/admin)."""
         if not meta.can_write(prompt_id, user):
             raise HTTPException(403, "You do not own this prompt")
@@ -230,11 +231,18 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
         """Static, no-LLM prompt linting → stylistic/determinism/hallucination findings."""
         return {"findings": [f.to_dict() for f in lint_template(body.template)]}
 
-    @app.get("/api/search", dependencies=_auth)
-    def search(q: str, limit: int = 5) -> list[dict]:
-        """Full-text search over prompts."""
-        results = pg_search(q, db_path=db, limit=limit)
-        return [{"prompt_id": pid, "score": score} for pid, score in results]
+    @app.get("/api/search")
+    def search(q: str, limit: int = 5, user: dict = Depends(get_current_user)) -> list[dict]:
+        """Full-text search over prompts the caller may see."""
+        # Over-fetch, then apply ownership filter, then slice — so the caller
+        # still gets up to `limit` rows they're allowed to see.
+        results = pg_search(q, db_path=db, limit=max(limit * 5, limit))
+        allowed = [
+            {"prompt_id": pid, "score": score}
+            for pid, score in results
+            if meta.can_read(pid, user)
+        ]
+        return allowed[:limit]
 
     # ── compile ───────────────────────────────────────────────────────────────
 

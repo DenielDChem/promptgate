@@ -94,6 +94,24 @@ def test_validator_cannot_create(app, app_db):
     assert val.post("/api/prompts", json=_prompt()).status_code == 403
 
 
+def test_validator_cannot_delete(app, app_db):
+    """LOW fix: delete is gated by prompt.delete_own RBAC, not just ownership."""
+    alex, _ = _user_client(app, app_db, "alex", "prompter")
+    val, _ = _user_client(app, app_db, "val", "validator")
+    alex.post("/api/prompts", json=_prompt("p1"))
+    assert val.delete("/api/prompts/p1").status_code == 403
+
+
+def test_owner_not_reassigned_on_update(app, app_db):
+    """HIGH fix: saving over a prompt never transfers ownership."""
+    alex, alex_u = _user_client(app, app_db, "alex", "prompter")
+    admin, _ = _user_client(app, app_db, "boss", "admin")
+    alex.post("/api/prompts", json=_prompt("p1"))
+    # admin (can write anything) saves an update; ownership must stay with alex
+    admin.post("/api/prompts", json={**_prompt("p1", template="edited {{ name }}. JSON."), "message": "admin edit"})
+    assert admin.get("/api/prompts/p1").json()["owner_id"] == alex_u["id"]
+
+
 def test_cannot_compile_others_prompt(app, app_db):
     """IDOR: compile/run/validate enforce read access by prompt_id."""
     alex, _ = _user_client(app, app_db, "alex", "prompter")
@@ -101,6 +119,9 @@ def test_cannot_compile_others_prompt(app, app_db):
     alex.post("/api/prompts", json=_prompt("secret_p"))
     r = maria.post("/api/compile", json={"prompt_id": "secret_p", "payload": {}})
     assert r.status_code == 403
+    # search must not leak another owner's prompt_ids
+    hits = {h["prompt_id"] for h in maria.get("/api/search", params={"q": "secret_p"}).json()}
+    assert "secret_p" not in hits
 
 
 # ── lint endpoint ─────────────────────────────────────────────────────────────────

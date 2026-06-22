@@ -88,13 +88,13 @@ class PromptMetaStore:
                     (prompt_id, author_id, now, now),
                 )
             else:
+                # Bump the version only — NEVER silently reassign ownership on
+                # update. Auto-claiming would let any writer permanently hijack an
+                # unclaimed/legacy prompt. Ownership is set once, at creation.
                 version_no = meta["current_version"] + 1
-                # claim an unowned prompt for its first explicit editor
-                owner = meta["owner_id"] if meta["owner_id"] is not None else author_id
                 c.execute(
-                    "UPDATE prompt_meta SET current_version=?, owner_id=?, updated_at=? "
-                    "WHERE prompt_id=?",
-                    (version_no, owner, now, prompt_id),
+                    "UPDATE prompt_meta SET current_version=?, updated_at=? WHERE prompt_id=?",
+                    (version_no, now, prompt_id),
                 )
             c.execute(
                 "INSERT INTO prompt_versions "
