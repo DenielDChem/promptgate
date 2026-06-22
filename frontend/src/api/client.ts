@@ -3,6 +3,11 @@
 
 import type {
   AuthSuccess,
+  JobCreatePayload,
+  JobDetail,
+  JobStatus,
+  JobSummary,
+  JobSummaryCounts,
   LintResult,
   PromptConfig,
   PromptSavePayload,
@@ -191,4 +196,37 @@ export const validationApi = {
 
   /** Quality dashboard across the caller's prompts. */
   dashboard: (token: string) => request<QualityRow[]>('/quality', { token }),
+};
+
+// ─── Task queue (P4 §6, §9) — admin-only; non-admins get 403 ─────────────────
+
+export interface CancelResult {
+  ok: boolean;
+  status: JobStatus;
+}
+
+export const jobsApi = {
+  /** Enqueue a job. Returns the freshly-created summary (status: queued). */
+  create: (payload: JobCreatePayload, token: string) =>
+    request<JobSummary>('/jobs', { method: 'POST', body: payload, token }),
+
+  /** All jobs (newest first); optional status filter. */
+  list: (token: string, status?: JobStatus) =>
+    request<JobSummary[]>(`/jobs${status ? `?status=${encodeURIComponent(status)}` : ''}`, {
+      token,
+    }),
+
+  /** Full job incl. result / error. */
+  get: (id: string, token: string) =>
+    request<JobDetail>(`/jobs/${encodeURIComponent(id)}`, { token }),
+
+  /** Cancel a queued/running job; no-op (may 409) once terminal. */
+  cancel: (id: string, token: string) =>
+    request<CancelResult>(`/jobs/${encodeURIComponent(id)}/cancel`, {
+      method: 'POST',
+      token,
+    }),
+
+  /** Per-status counts for the status bar. */
+  summary: (token: string) => request<JobSummaryCounts>('/jobs/summary', { token }),
 };
