@@ -13,3 +13,7 @@ logs/
 *.pem
 *.credentials.json
 .credentials.json
+
+# tooling / session scratch (claude-flow, agent worktrees)
+.claude-flow/
+.claude/worktrees/
