@@ -10,6 +10,15 @@ import { ContextMenu, type MenuPos } from './ContextMenu';
 import { Taskbar } from './Taskbar';
 import { Window } from '@/components/Window';
 import { ModulePlaceholder } from '@/windows/ModulePlaceholder';
+import { PromptsModule } from '@/windows/PromptsModule';
+import type { ModuleId } from '@/lib/types';
+
+/** Body renderer per module — built modules get their window, the rest fall
+ * back to the P2+ placeholder. */
+function ModuleBody({ module }: { module: ModuleId }) {
+  if (module === 'my-prompts') return <PromptsModule />;
+  return <ModulePlaceholder module={module} />;
+}
 
 export function Desktop() {
   const windows = useWindowStore((s) => s.windows);
@@ -41,7 +50,7 @@ export function Desktop() {
         {/* Windows */}
         {windows.map((w) => (
           <Window key={w.id} win={w}>
-            <ModulePlaceholder module={w.module} />
+            <ModuleBody module={w.module} />
           </Window>
         ))}
 

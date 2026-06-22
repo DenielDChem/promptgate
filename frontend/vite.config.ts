@@ -16,5 +16,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        // Split the (large but cacheable) Monaco editor into its own chunk so
+        // it doesn't bloat the app entry and is cached across deploys (P2).
+        manualChunks(id) {
+          if (id.includes('node_modules/monaco-editor')) return 'monaco';
+        },
+      },
+    },
   },
 });

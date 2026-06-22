@@ -40,13 +40,21 @@ interface WindowStore {
 }
 
 const DEFAULT_SIZE = { w: 640, h: 440 };
+// Some modules need more room than the default (e.g. the 3-pane Monaco editor).
+const MODULE_SIZE: Partial<Record<ModuleId, { w: number; h: number }>> = {
+  'my-prompts': { w: 1000, h: 620 },
+};
 let openCount = 0;
 
-function spawnRect(): Rect {
+function spawnRect(module: ModuleId): Rect {
   // Cascade new windows so they don't stack exactly.
   const offset = (openCount % 8) * 28;
   openCount += 1;
-  return { x: 80 + offset, y: 64 + offset, w: DEFAULT_SIZE.w, h: DEFAULT_SIZE.h };
+  const base = MODULE_SIZE[module] ?? DEFAULT_SIZE;
+  // Clamp to the viewport so big windows still fit on small screens.
+  const w = Math.min(base.w, Math.max(320, window.innerWidth - 32));
+  const h = Math.min(base.h, Math.max(240, window.innerHeight - 96));
+  return { x: 80 + offset, y: 64 + offset, w, h };
 }
 
 export const useWindowStore = create<WindowStore>((set, get) => ({
@@ -76,7 +84,7 @@ export const useWindowStore = create<WindowStore>((set, get) => ({
         id: `win-${module}-${Date.now()}`,
         module,
         title,
-        rect: spawnRect(),
+        rect: spawnRect(module),
         z,
         minimized: false,
         maximized: false,

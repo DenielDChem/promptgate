@@ -1,7 +1,15 @@
 // Thin fetch wrapper around the PromptGate backend auth contract.
 // VITE_API_BASE defaults to '' so requests hit same-origin /api (FastAPI serves dist/).
 
-import type { AuthSuccess, User } from '@/lib/types';
+import type {
+  AuthSuccess,
+  LintResult,
+  PromptConfig,
+  PromptSavePayload,
+  PromptSummary,
+  PromptVersion,
+  User,
+} from '@/lib/types';
 
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? '';
 
@@ -91,4 +99,58 @@ export const authApi = {
 
   logout: (token: string) =>
     request<{ ok: boolean }>('/auth/logout', { method: 'POST', token }),
+};
+
+// ─── Prompts + versioning (P2) ───────────────────────────────────────────────
+
+export interface SaveResult {
+  ok: boolean;
+  id: string;
+  version: number;
+}
+
+export interface RollbackResult {
+  ok: boolean;
+  version: number;
+}
+
+export const promptsApi = {
+  list: (token: string) => request<PromptSummary[]>('/prompts', { token }),
+
+  get: (id: string, token: string) =>
+    request<PromptConfig>(`/prompts/${encodeURIComponent(id)}`, { token }),
+
+  save: (payload: PromptSavePayload, token: string) =>
+    request<SaveResult>('/prompts', { method: 'POST', body: payload, token }),
+
+  remove: (id: string, token: string) =>
+    request<{ ok: boolean }>(`/prompts/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      token,
+    }),
+
+  versions: (id: string, token: string) =>
+    request<PromptVersion[]>(`/prompts/${encodeURIComponent(id)}/versions`, {
+      token,
+    }),
+
+  version: (id: string, n: number, token: string) =>
+    request<PromptConfig>(
+      `/prompts/${encodeURIComponent(id)}/versions/${n}`,
+      { token },
+    ),
+
+  rollback: (id: string, version_no: number, token: string) =>
+    request<RollbackResult>(`/prompts/${encodeURIComponent(id)}/rollback`, {
+      method: 'POST',
+      body: { version_no },
+      token,
+    }),
+};
+
+// ─── Live validation (P2 §4) ──────────────────────────────────────────────────
+
+export const lintApi = {
+  check: (template: string, token: string) =>
+    request<LintResult>('/lint', { method: 'POST', body: { template }, token }),
 };
