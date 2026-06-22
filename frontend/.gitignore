@@ -1,0 +1,10 @@
+node_modules/
+*.local
+.vite/
+.DS_Store
+*.log
+*.tsbuildinfo
+# dist/ is intentionally committed (FastAPI serves it; pip users need a prebuilt
+# UI — see docs/PLATFORM_ARCHITECTURE.md §1). The repo-root .gitignore ignores
+# dist/ for the Python package, so re-include the frontend build here.
+!dist/

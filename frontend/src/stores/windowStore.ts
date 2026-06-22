@@ -1,0 +1,159 @@
+// Window manager store — open windows, z-order/focus, minimize/close,
+// drag (titlebar) + resize geometry. Geometry mutations are driven by the
+// <Window> component; this store is the single source of truth.
+
+import { create } from 'zustand';
+import type { ModuleId } from '@/lib/types';
+
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface WinState {
+  id: string;
+  module: ModuleId;
+  title: string;
+  rect: Rect;
+  z: number;
+  minimized: boolean;
+  maximized: boolean;
+  /** Geometry stashed before maximize, restored on un-maximize. */
+  restoreRect: Rect | null;
+}
+
+interface WindowStore {
+  windows: WinState[];
+  focusedId: string | null;
+  topZ: number;
+
+  open: (module: ModuleId, title: string) => void;
+  close: (id: string) => void;
+  focus: (id: string) => void;
+  minimize: (id: string) => void;
+  toggleMinimize: (id: string) => void;
+  toggleMaximize: (id: string) => void;
+  move: (id: string, x: number, y: number) => void;
+  resize: (id: string, w: number, h: number) => void;
+}
+
+const DEFAULT_SIZE = { w: 640, h: 440 };
+let openCount = 0;
+
+function spawnRect(): Rect {
+  // Cascade new windows so they don't stack exactly.
+  const offset = (openCount % 8) * 28;
+  openCount += 1;
+  return { x: 80 + offset, y: 64 + offset, w: DEFAULT_SIZE.w, h: DEFAULT_SIZE.h };
+}
+
+export const useWindowStore = create<WindowStore>((set, get) => ({
+  windows: [],
+  focusedId: null,
+  topZ: 0,
+
+  open: (module, title) => {
+    // One window per module: if already open, focus + un-minimize it.
+    const existing = get().windows.find((w) => w.module === module);
+    if (existing) {
+      set((s) => {
+        const z = s.topZ + 1;
+        return {
+          topZ: z,
+          focusedId: existing.id,
+          windows: s.windows.map((w) =>
+            w.id === existing.id ? { ...w, z, minimized: false } : w,
+          ),
+        };
+      });
+      return;
+    }
+    set((s) => {
+      const z = s.topZ + 1;
+      const win: WinState = {
+        id: `win-${module}-${Date.now()}`,
+        module,
+        title,
+        rect: spawnRect(),
+        z,
+        minimized: false,
+        maximized: false,
+        restoreRect: null,
+      };
+      return { windows: [...s.windows, win], focusedId: win.id, topZ: z };
+    });
+  },
+
+  close: (id) =>
+    set((s) => {
+      const windows = s.windows.filter((w) => w.id !== id);
+      const focusedId =
+        s.focusedId === id
+          ? (windows.filter((w) => !w.minimized).sort((a, b) => b.z - a.z)[0]?.id ??
+            null)
+          : s.focusedId;
+      return { windows, focusedId };
+    }),
+
+  focus: (id) =>
+    set((s) => {
+      if (s.focusedId === id && !s.windows.find((w) => w.id === id)?.minimized) {
+        return s;
+      }
+      const z = s.topZ + 1;
+      return {
+        topZ: z,
+        focusedId: id,
+        windows: s.windows.map((w) =>
+          w.id === id ? { ...w, z, minimized: false } : w,
+        ),
+      };
+    }),
+
+  minimize: (id) =>
+    set((s) => ({
+      windows: s.windows.map((w) => (w.id === id ? { ...w, minimized: true } : w)),
+      focusedId: s.focusedId === id ? null : s.focusedId,
+    })),
+
+  toggleMinimize: (id) => {
+    const win = get().windows.find((w) => w.id === id);
+    if (!win) return;
+    if (win.minimized || get().focusedId !== id) get().focus(id);
+    else get().minimize(id);
+  },
+
+  toggleMaximize: (id) =>
+    set((s) => ({
+      windows: s.windows.map((w) => {
+        if (w.id !== id) return w;
+        if (w.maximized) {
+          return {
+            ...w,
+            maximized: false,
+            rect: w.restoreRect ?? w.rect,
+            restoreRect: null,
+          };
+        }
+        return { ...w, maximized: true, restoreRect: w.rect };
+      }),
+    })),
+
+  move: (id, x, y) =>
+    set((s) => ({
+      windows: s.windows.map((w) =>
+        w.id === id ? { ...w, rect: { ...w.rect, x, y } } : w,
+      ),
+    })),
+
+  resize: (id, w, h) =>
+    set((s) => ({
+      windows: s.windows.map((win) =>
+        win.id === id
+          ? { ...win, rect: { ...win.rect, w: Math.max(280, w), h: Math.max(160, h) } }
+          : win,
+      ),
+    })),
+}));

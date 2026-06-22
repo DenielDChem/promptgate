@@ -1,0 +1,218 @@
+@import 'tailwindcss';
+
+/* ───────────────────────────────────────────────────────────────────────────
+   PromptGate design system — "Cyberpunk Terminal meets Windows 95"
+   Palette + pixel grid encoded as Tailwind v4 theme tokens.
+   ─────────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Surfaces */
+  --color-bg: #0d0f14;
+  --color-card: #1a1d24;
+  --color-border: #2a2f3a;
+
+  /* Accents */
+  --color-neon: #00ff9d; /* success / accent-1 */
+  --color-neon-dim: #0bbf78; /* darkened neon for body text on dark (AA) */
+  --color-violet: #9d4eff; /* action / accent-2 */
+  --color-orange: #ff6b35; /* warning */
+  --color-red: #ff3b3b; /* error */
+
+  /* Text */
+  --color-ink: #e8e8e8;
+  --color-ink-dim: #888888;
+
+  /* Fonts */
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+
+  /* 4px pixel-step radii (kept hard/small for the retro feel) */
+  --radius-pixel: 2px;
+  --radius-pixel-lg: 4px;
+
+  /* Win95-style bevel shadows (raised / inset) built from hard 1-2px edges */
+  --shadow-raised:
+    inset 1px 1px 0 0 rgba(255, 255, 255, 0.12),
+    inset -1px -1px 0 0 rgba(0, 0, 0, 0.6),
+    2px 2px 0 0 rgba(0, 0, 0, 0.45);
+  --shadow-inset:
+    inset 1px 1px 0 0 rgba(0, 0, 0, 0.6),
+    inset -1px -1px 0 0 rgba(255, 255, 255, 0.08);
+  --shadow-window:
+    0 0 0 1px #2a2f3a,
+    4px 4px 0 0 rgba(0, 0, 0, 0.55);
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Base layer
+   ─────────────────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  ::selection {
+    background: var(--color-violet);
+    color: #fff;
+  }
+
+  /* Pixel-crisp focus ring (keyboard accessibility) */
+  :focus-visible {
+    outline: 2px solid var(--color-neon);
+    outline-offset: 1px;
+  }
+
+  input,
+  button,
+  textarea,
+  select {
+    font-family: inherit;
+    font-size: inherit;
+  }
+
+  /* Thin retro scrollbars */
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-bg);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border: 2px solid var(--color-bg);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3a4150;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Component utilities — pixel primitives
+   ─────────────────────────────────────────────────────────────────────────── */
+@layer components {
+  .pixel-raised {
+    box-shadow: var(--shadow-raised);
+  }
+  .pixel-inset {
+    box-shadow: var(--shadow-inset);
+  }
+
+  /* 24px desktop grid (spec §5) */
+  .desktop-grid {
+    background-image:
+      linear-gradient(to right, rgba(42, 47, 58, 0.4) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(42, 47, 58, 0.4) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Scanline overlay — disabled under prefers-reduced-motion (see below) */
+  .scanlines::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0, 255, 157, 0.025) 0px,
+      rgba(0, 255, 157, 0.025) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    z-index: 5;
+    animation: scanline-drift 8s linear infinite;
+  }
+
+  /* Subtle noise via repeating radial speckle */
+  .noise::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.04;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.7) 0.5px, transparent 0.5px);
+    background-size: 3px 3px;
+    z-index: 4;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Animations — terminal print + scanline drift
+   ─────────────────────────────────────────────────────────────────────────── */
+@keyframes scanline-drift {
+  0% {
+    background-position-y: 0;
+  }
+  100% {
+    background-position-y: 24px;
+  }
+}
+
+@keyframes terminal-print {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.terminal-print {
+  animation: terminal-print 0.18s steps(4, end) both;
+}
+
+.caret::after {
+  content: '_';
+  color: var(--color-neon);
+  animation: caret-blink 1s steps(1) infinite;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Respect prefers-reduced-motion: kill scanline + all transitions/animations
+   ─────────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .scanlines::after {
+    display: none;
+  }
+  .caret::after {
+    animation: none;
+    opacity: 1;
+  }
+}
