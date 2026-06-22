@@ -13,6 +13,7 @@ import { ModulePlaceholder } from '@/windows/ModulePlaceholder';
 import { PromptsModule } from '@/windows/PromptsModule';
 import { ValidatorModule } from '@/windows/ValidatorModule';
 import { QualityModule } from '@/windows/QualityModule';
+import { QueueModule } from '@/windows/QueueModule';
 import type { ModuleId } from '@/lib/types';
 
 /** Body renderer per module — built modules get their window, the rest fall
@@ -21,6 +22,7 @@ function ModuleBody({ module }: { module: ModuleId }) {
   if (module === 'my-prompts') return <PromptsModule />;
   if (module === 'validator') return <ValidatorModule />;
   if (module === 'quality') return <QualityModule />;
+  if (module === 'queue') return <QueueModule />;
   return <ModulePlaceholder module={module} />;
 }
 

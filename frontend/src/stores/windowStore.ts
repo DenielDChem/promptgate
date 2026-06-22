@@ -45,6 +45,7 @@ const MODULE_SIZE: Partial<Record<ModuleId, { w: number; h: number }>> = {
   'my-prompts': { w: 1000, h: 620 },
   validator: { w: 960, h: 600 },
   quality: { w: 960, h: 600 },
+  queue: { w: 980, h: 620 },
 };
 let openCount = 0;
 

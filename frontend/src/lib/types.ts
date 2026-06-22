@@ -21,6 +21,7 @@ export type ModuleId =
   | 'templates'
   | 'validator'
   | 'quality'
+  | 'queue'
   | 'admin'
   | 'logs'
   | 'trash';
@@ -175,4 +176,56 @@ export interface QualityRow {
   determinism: number;
   color: ValidationColor;
   n_validations: number;
+}
+
+// ─── Task queue (P4 §6, §9) — admin-only ─────────────────────────────────────
+
+/** Background job kinds the queue can run. */
+export type JobType = 'validation' | 'generation' | 'mass_test';
+
+/** Lifecycle of a queued job. queued/running are non-terminal. */
+export type JobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+/** Scheduling priority — affects worker pick order, not the UI besides a label. */
+export type JobPriority = 'high' | 'medium' | 'low';
+
+/** Body for POST /api/jobs. */
+export interface JobCreatePayload {
+  type: JobType;
+  prompt_id?: string;
+  model_id?: string;
+  priority?: JobPriority;
+  params?: Record<string, unknown>;
+}
+
+/** Row shape from GET /api/jobs and POST /api/jobs (list/summary view). */
+export interface JobSummary {
+  id: string;
+  type: JobType;
+  status: JobStatus;
+  priority: JobPriority;
+  prompt_id?: string | null;
+  model_id?: string | null;
+  /** Units of work done so far (0..total). */
+  progress: number;
+  /** Total units of work; 0 until the worker knows the size. */
+  total: number;
+  created_at: string;
+  updated_at?: string;
+}
+
+/** Full job from GET /api/jobs/{id} — adds terminal result / error. */
+export interface JobDetail extends JobSummary {
+  result: Record<string, unknown> | null;
+  error: string | null;
+}
+
+/** GET /api/jobs/summary — counts per status for the status bar. */
+export interface JobSummaryCounts {
+  queued: number;
+  running: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+  total: number;
 }

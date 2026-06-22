@@ -13,6 +13,7 @@ export const MODULE_META: Record<ModuleId, ModuleMeta> = {
   templates: { id: 'templates', title: 'Templates', glyph: '▦' },
   validator: { id: 'validator', title: 'Validator', glyph: '◉' },
   quality: { id: 'quality', title: 'Quality', glyph: '📊' },
+  queue: { id: 'queue', title: 'Task Queue', glyph: '⏳' },
   admin: { id: 'admin', title: 'Admin', glyph: '⚙' },
   logs: { id: 'logs', title: 'Agent Logs', glyph: '☰' },
   trash: { id: 'trash', title: 'Trash', glyph: '⌫' },
