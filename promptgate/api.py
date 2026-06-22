@@ -27,6 +27,7 @@ from promptgate.auth.deps import make_auth_deps
 from promptgate.migrations import run_migrations
 from promptgate.prompts_service import PromptMetaStore
 from promptgate.quality import lint_template
+from promptgate.quality.store import QualityStore
 
 
 def _cors_origins() -> list[str]:
@@ -82,6 +83,17 @@ class _RollbackIn(BaseModel):
     version_no: int
 
 
+class _ValidateCaseIn(BaseModel):
+    question: str
+    payload: dict = {}
+
+
+class _ValidateRunIn(BaseModel):
+    model_id: str
+    cases: list[_ValidateCaseIn] = []
+    repeats: int = 3
+
+
 def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
     """Create and return a configured FastAPI application.
 
@@ -117,7 +129,9 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
     require_create = require_permission("prompt.create")
     require_edit = require_permission("prompt.edit_own")
     require_delete = require_permission("prompt.delete_own")
+    require_validate = require_permission("validate.run")
     meta = PromptMetaStore(db)
+    quality_store = QualityStore(db)
 
     def _backend() -> SQLiteBackend:
         b = SQLiteBackend(db)
@@ -230,6 +244,75 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH) -> FastAPI:
     def lint_endpoint(body: _LintIn, _: dict = Depends(get_current_user)) -> dict:
         """Static, no-LLM prompt linting → stylistic/determinism/hallucination findings."""
         return {"findings": [f.to_dict() for f in lint_template(body.template)]}
+
+    # ── deep validation + quality (P3) ──────────────────────────────────────────
+
+    @app.post("/api/prompts/{prompt_id}/validate")
+    def validate_run(
+        prompt_id: str, body: _ValidateRunIn, user: dict = Depends(require_validate),
+    ) -> dict:
+        """Run a deep, LLM-backed validation over a test set; persist scores."""
+        if not meta.can_read(prompt_id, user):
+            raise HTTPException(403, "You do not have access to this prompt")
+        if _backend().get(prompt_id) is None:
+            raise HTTPException(404, f"Prompt '{prompt_id}' not found")
+        from promptgate.quality import deep, scorers
+        try:
+            generate_fn = scorers.build_generate_fn(prompt_id, body.model_id, db)
+            judge_fn = scorers.build_judge_fn(body.model_id)
+        except ImportError as exc:
+            raise HTTPException(501, "litellm not installed: pip install pgate[litellm]") from exc
+        cases = [c.model_dump() for c in body.cases]
+        try:
+            result = deep.run_validation(cases, generate_fn, judge_fn, repeats=body.repeats)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001 — surface LLM/runtime errors as 422
+            raise HTTPException(422, f"Validation error: {exc}") from exc
+        m = meta.get_meta(prompt_id)
+        run_id = quality_store.save_run(
+            prompt_id, m["current_version"] if m else None, body.model_id, result, user["id"],
+        )
+        out = result.to_dict()
+        out.update({"run_id": run_id, "model_id": body.model_id})
+        return out
+
+    @app.get("/api/prompts/{prompt_id}/quality")
+    def prompt_quality(prompt_id: str, user: dict = Depends(get_current_user)) -> dict:
+        if not meta.can_read(prompt_id, user):
+            raise HTTPException(403, "You do not have access to this prompt")
+        q = quality_store.get_quality(prompt_id)
+        if q is None:
+            raise HTTPException(404, "No validation runs for this prompt yet")
+        return q
+
+    @app.get("/api/prompts/{prompt_id}/validations")
+    def prompt_validations(prompt_id: str, user: dict = Depends(get_current_user)) -> list[dict]:
+        if not meta.can_read(prompt_id, user):
+            raise HTTPException(403, "You do not have access to this prompt")
+        return quality_store.list_runs(prompt_id)
+
+    @app.get("/api/validations/{run_id}")
+    def validation_detail(run_id: int, user: dict = Depends(get_current_user)) -> dict:
+        prompt_id = quality_store.run_owner_prompt(run_id)
+        if prompt_id is None:
+            raise HTTPException(404, f"Run {run_id} not found")
+        if not meta.can_read(prompt_id, user):
+            raise HTTPException(403, "You do not have access to this run")
+        return quality_store.get_run(run_id)
+
+    @app.get("/api/quality")
+    def quality_dashboard(user: dict = Depends(get_current_user)) -> list[dict]:
+        """Quality rollup for every prompt the caller may see (admins: all)."""
+        names = {p.id: p.name for p in _backend().list_all()}
+        out = []
+        for row in quality_store.dashboard():
+            pid = row["prompt_id"]
+            if not meta.can_read(pid, user):
+                continue
+            row["name"] = names.get(pid, pid)
+            out.append(row)
+        return out
 
     @app.get("/api/search")
     def search(q: str, limit: int = 5, user: dict = Depends(get_current_user)) -> list[dict]:

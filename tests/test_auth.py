@@ -30,8 +30,10 @@ def client(tmp_path):
 # ── migrations ────────────────────────────────────────────────────────────────
 def test_migrations_idempotent(tmp_path):
     p = tmp_path / "m.sqlite"
-    assert run_migrations(p) == ["0001_auth", "0002_prompt_meta_versions"]
-    assert run_migrations(p) == []
+    applied = run_migrations(p)
+    assert applied[:2] == ["0001_auth", "0002_prompt_meta_versions"]
+    assert "0003_validation_quality" in applied
+    assert run_migrations(p) == []   # second run is a no-op
 
 
 # ── rbac ──────────────────────────────────────────────────────────────────────

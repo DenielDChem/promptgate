@@ -91,6 +91,53 @@ _MIGRATIONS: list[tuple[str, str]] = [
         CREATE INDEX IF NOT EXISTS idx_pm_owner  ON prompt_meta(owner_id);
         """,
     ),
+    (
+        "0003_validation_quality",
+        # P3: deep (LLM-backed) validation runs + per-case detail + a latest-
+        # quality rollup per prompt. Metrics: determinism 0-100, comprehension
+        # 0-10 (higher better), hallucination 0-10 (lower better), latency ms.
+        """
+        CREATE TABLE IF NOT EXISTS validation_runs (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            prompt_id     TEXT    NOT NULL,
+            version_no    INTEGER,
+            model_id      TEXT    NOT NULL,
+            determinism   REAL,
+            comprehension REAL,
+            hallucination REAL,
+            latency_ms    INTEGER,
+            n_cases       INTEGER NOT NULL DEFAULT 0,
+            color         TEXT,
+            created_by    INTEGER,
+            created_at    INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS validation_cases (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id        INTEGER NOT NULL REFERENCES validation_runs(id) ON DELETE CASCADE,
+            question      TEXT    NOT NULL,
+            answer        TEXT,
+            score         REAL,
+            hallucination REAL,
+            flagged_block TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS quality_scores (
+            prompt_id      TEXT    PRIMARY KEY,
+            version_no     INTEGER,
+            avg_score      REAL,
+            comprehension  REAL,
+            determinism    REAL,
+            hallucination  REAL,
+            n_validations  INTEGER NOT NULL DEFAULT 0,
+            color          TEXT,
+            updated_at     INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_vr_prompt ON validation_runs(prompt_id);
+        CREATE INDEX IF NOT EXISTS idx_vc_run    ON validation_cases(run_id);
+        """,
+    ),
 ]
 
 
