@@ -20,6 +20,7 @@ export type ModuleId =
   | 'my-prompts'
   | 'templates'
   | 'validator'
+  | 'quality'
   | 'admin'
   | 'logs'
   | 'trash';
@@ -95,4 +96,83 @@ export interface LintFinding {
 
 export interface LintResult {
   findings: LintFinding[];
+}
+
+// ─── Deep validation + quality (P3 §4, §8.2) ─────────────────────────────────
+
+/** Traffic-light grade shared by validation runs and quality scores. */
+export type ValidationColor = 'green' | 'yellow' | 'red';
+
+/** A single test-set entry the user authors before running a validation. */
+export interface TestCase {
+  question: string;
+  payload?: string;
+}
+
+/** Body for POST /api/prompts/{id}/validate. */
+export interface ValidatePayload {
+  model_id: string;
+  cases?: TestCase[];
+  repeats?: number;
+}
+
+/** One graded answer in a validation run. */
+export interface ValidationCaseResult {
+  question: string;
+  answer: string;
+  /** Comprehension/quality judge score for this answer, 0–10 (higher better). */
+  score: number;
+  /** Hallucination score for this answer, 0–10 (LOWER better). */
+  hallucination: number;
+  /** Verbatim slice of the answer the judge flagged, if any. */
+  flagged_block?: string;
+}
+
+/** Aggregate metrics shared by a run summary and a full run. */
+export interface ValidationMetrics {
+  model_id: string;
+  /** Answer stability across repeats, 0–100 (%). */
+  determinism: number;
+  /** Comprehension judge score, 0–10 (higher better). */
+  comprehension: number;
+  /** Hallucination score, 0–10 (LOWER better). */
+  hallucination: number;
+  latency_ms: number;
+  n_cases: number;
+}
+
+/** Full result of POST /api/prompts/{id}/validate and GET /api/validations/{run_id}. */
+export interface ValidationRun extends ValidationMetrics {
+  run_id: string;
+  color: ValidationColor;
+  cases: ValidationCaseResult[];
+}
+
+/** One row of GET /api/prompts/{id}/validations (newest first). */
+export interface ValidationRunSummary extends ValidationMetrics {
+  run_id: string;
+  created_at: string;
+}
+
+/** GET /api/prompts/{id}/quality — null/404 if never validated. */
+export interface QualityScore {
+  prompt_id: string;
+  version_no: number;
+  avg_score: number;
+  comprehension: number;
+  determinism: number;
+  hallucination: number;
+  n_validations: number;
+  color: ValidationColor;
+}
+
+/** One row of the GET /api/quality dashboard. */
+export interface QualityRow {
+  prompt_id: string;
+  name: string;
+  avg_score: number;
+  hallucination: number;
+  determinism: number;
+  color: ValidationColor;
+  n_validations: number;
 }
