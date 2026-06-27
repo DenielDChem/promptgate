@@ -3,6 +3,7 @@
 // highlighted beneath the answer so the user can see exactly what tripped it.
 
 import { ColorDot } from '@/components/ColorDot';
+import { Th } from '@/components/DataTable';
 import { gradeComprehension, gradeHallucination } from '@/lib/quality';
 import type { ValidationCaseResult } from '@/lib/types';
 
@@ -15,7 +16,7 @@ export function ResultsTable({ cases }: { cases: ValidationCaseResult[] }) {
     );
   }
   return (
-    <table className="w-full border-collapse font-mono text-xs">
+    <table className="w-full border-collapse font-mono text-xs tabular-nums">
       <thead className="sticky top-0 z-10 bg-card text-[10px] uppercase tracking-wide text-ink-dim">
         <tr>
           <Th className="w-1/3">Question</Th>
@@ -59,8 +60,4 @@ export function ResultsTable({ cases }: { cases: ValidationCaseResult[] }) {
       </tbody>
     </table>
   );
-}
-
-function Th({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <th className={`px-2 py-1.5 text-left font-normal ${className}`}>{children}</th>;
 }

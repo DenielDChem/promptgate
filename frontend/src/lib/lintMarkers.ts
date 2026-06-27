@@ -11,11 +11,12 @@
 import type { editor, MarkerSeverity } from 'monaco-editor';
 import type { LintFinding, LintType } from '@/lib/types';
 
-/** Hex colors for problem dots / pills, keyed by lint type. */
+/** Theme-token colors for problem dots / pills, keyed by lint type. Used in
+ *  inline styles, so they resolve the CSS custom properties directly. */
 export const LINT_COLOR: Record<LintType, string> = {
-  stylistic: '#ff6b35', // --color-orange (amber/warning)
-  determinism: '#4ea8ff', // blue
-  hallucination: '#ff3b3b', // --color-red
+  stylistic: 'var(--color-orange)', // amber/warning
+  determinism: 'var(--color-blue)', // informational blue
+  hallucination: 'var(--color-red)', // error red
 };
 
 export const LINT_LABEL: Record<LintType, string> = {

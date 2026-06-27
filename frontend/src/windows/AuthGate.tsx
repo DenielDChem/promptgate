@@ -24,7 +24,7 @@ export function AuthGate() {
     <div className="scanlines noise desktop-grid flex h-full w-full items-center justify-center bg-bg p-4">
       <div className="pixel-raised w-full max-w-sm rounded-pixel-lg border border-border bg-card">
         {/* Title bar */}
-        <div className="flex items-center gap-2 rounded-t-pixel-lg bg-gradient-to-r from-violet to-[#6f2fcf] px-3 py-1.5">
+        <div className="flex items-center gap-2 rounded-t-pixel-lg bg-gradient-to-r from-violet to-violet-deep px-3 py-1.5">
           <span className="text-neon">▣</span>
           <span className="font-mono text-xs font-bold uppercase tracking-widest text-white">
             PromptGate
@@ -66,6 +66,7 @@ function ErrorLine() {
 function LoginForm() {
   const login = useAuthStore((s) => s.login);
   const busy = useAuthStore((s) => s.busy);
+  const error = useAuthStore((s) => s.error);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
@@ -83,6 +84,7 @@ function LoginForm() {
         autoComplete="username"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
+        aria-invalid={!!error || undefined}
         required
         autoFocus
       />
@@ -92,6 +94,7 @@ function LoginForm() {
         autoComplete="current-password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
+        aria-invalid={!!error || undefined}
         required
       />
       <ErrorLine />

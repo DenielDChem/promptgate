@@ -6,6 +6,7 @@ import { useValidatorStore } from '@/stores/validatorStore';
 import { useAuthStore } from '@/stores/authStore';
 import { canRunValidation } from '@/lib/rbac';
 import { PixelButton } from '@/components/PixelButton';
+import { PixelSelect } from '@/components/PixelSelect';
 
 export function ValidatorForm() {
   const role = useAuthStore((s) => s.user?.role ?? 'guest');
@@ -29,6 +30,7 @@ export function ValidatorForm() {
   const addCase = useValidatorStore((s) => s.addCase);
   const removeCase = useValidatorStore((s) => s.removeCase);
   const run = useValidatorStore((s) => s.run);
+  const cancelRun = useValidatorStore((s) => s.cancelRun);
 
   useEffect(() => {
     void loadLookups();
@@ -47,7 +49,7 @@ export function ValidatorForm() {
 
       {/* Pickers */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Select
+        <PixelSelect
           label="Prompt"
           value={promptId}
           disabled={lookupsLoading}
@@ -55,7 +57,7 @@ export function ValidatorForm() {
           options={prompts.map((p) => ({ value: p.id, label: `${p.name} (${p.id})` }))}
           placeholder={lookupsLoading ? 'loading…' : 'no prompts'}
         />
-        <Select
+        <PixelSelect
           label="Model"
           value={modelId}
           disabled={lookupsLoading}
@@ -93,14 +95,14 @@ export function ValidatorForm() {
                   onChange={(e) => setCase(i, { question: e.target.value })}
                   placeholder="Question to ask the prompt…"
                   aria-label={`Test case ${i + 1} question`}
-                  className="pixel-inset rounded-pixel w-full bg-bg px-2.5 py-1.5 font-mono text-sm text-ink placeholder:text-ink-dim/60 focus:outline-none"
+                  className="pixel-inset rounded-pixel w-full bg-bg px-2.5 py-1.5 font-mono text-sm text-ink placeholder:text-ink-dim/60"
                 />
                 <input
                   value={c.payload ?? ''}
                   onChange={(e) => setCase(i, { payload: e.target.value })}
                   placeholder="Optional payload / context…"
                   aria-label={`Test case ${i + 1} payload`}
-                  className="pixel-inset rounded-pixel w-full bg-bg px-2.5 py-1 font-mono text-xs text-ink-dim placeholder:text-ink-dim/50 focus:outline-none"
+                  className="pixel-inset rounded-pixel w-full bg-bg px-2.5 py-1 font-mono text-xs text-ink-dim placeholder:text-ink-dim/50"
                 />
               </div>
               <button
@@ -129,7 +131,7 @@ export function ValidatorForm() {
             value={repeats}
             onChange={(e) => setRepeats(Number(e.target.value))}
             aria-label="Repeats per case"
-            className="pixel-inset rounded-pixel w-20 bg-bg px-2.5 py-1.5 font-mono text-sm text-ink focus:outline-none"
+            className="pixel-inset rounded-pixel w-20 bg-bg px-2.5 py-1.5 font-mono text-sm text-ink"
           />
         </label>
         <div className="ml-auto flex flex-col items-end gap-1">
@@ -138,47 +140,22 @@ export function ValidatorForm() {
               {role} cannot run validations
             </span>
           )}
-          <PixelButton
-            variant="primary"
-            onClick={() => void run()}
-            disabled={!mayRun || running || !promptId || !modelId}
-          >
-            {running ? 'Running…' : '▶ Run validation'}
-          </PixelButton>
+          {running ? (
+            <PixelButton variant="danger" onClick={cancelRun}>
+              ■ Cancel
+            </PixelButton>
+          ) : (
+            <PixelButton
+              variant="primary"
+              onClick={() => void run()}
+              disabled={!mayRun || !promptId || !modelId}
+            >
+              ▶ Run validation
+            </PixelButton>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-interface SelectProps {
-  label: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (value: string) => void;
-  disabled?: boolean;
-  placeholder?: string;
-}
-
-function Select({ label, value, options, onChange, disabled, placeholder }: SelectProps) {
-  return (
-    <label className="flex min-w-0 flex-col gap-1">
-      <span className="font-mono text-xs uppercase tracking-wide text-ink-dim">
-        {label}
-      </span>
-      <select
-        value={value}
-        disabled={disabled || options.length === 0}
-        onChange={(e) => onChange(e.target.value)}
-        className="pixel-inset rounded-pixel bg-bg px-2.5 py-1.5 font-mono text-sm text-ink focus:outline-none disabled:opacity-50"
-      >
-        {options.length === 0 && <option value="">{placeholder}</option>}
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}

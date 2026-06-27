@@ -18,7 +18,7 @@ export function PixelField({ label, className = '', ...rest }: FieldProps) {
         {...rest}
         className={[
           'pixel-inset rounded-pixel bg-bg px-2.5 py-1.5 font-mono text-sm text-ink',
-          'placeholder:text-ink-dim/60 focus:outline-none',
+          'placeholder:text-ink-dim/60',
           className,
         ].join(' ')}
       />
@@ -42,7 +42,7 @@ export function PixelTextArea({ label, className = '', ...rest }: AreaProps) {
         {...rest}
         className={[
           'pixel-inset rounded-pixel resize-none bg-bg px-2.5 py-1.5 font-mono text-sm text-ink',
-          'placeholder:text-ink-dim/60 focus:outline-none',
+          'placeholder:text-ink-dim/60',
           className,
         ].join(' ')}
       />

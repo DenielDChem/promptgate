@@ -30,7 +30,14 @@ export function InspectorPane({ readOnly, onSave, onPublish }: InspectorProps) {
 
   const onSelectVersion = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const n = Number(e.target.value);
-    if (n && n !== draft.current_version) void viewVersion(n);
+    if (n && n !== draft.current_version) {
+      // Loading another version overwrites the draft — guard unsaved edits.
+      if (dirty && !window.confirm('Discard unsaved changes to view another version?')) {
+        e.target.value = String(draft.current_version);
+        return;
+      }
+      void viewVersion(n);
+    }
   };
 
   const onRollback = async (n: number) => {
@@ -97,7 +104,7 @@ export function InspectorPane({ readOnly, onSave, onPublish }: InspectorProps) {
           disabled={draft.isNew || versions.length === 0}
           value={draft.current_version}
           onChange={onSelectVersion}
-          className="pixel-inset rounded-pixel bg-bg px-2 py-1.5 font-mono text-sm text-ink focus:outline-none disabled:opacity-50"
+          className="pixel-inset rounded-pixel bg-bg px-2 py-1.5 font-mono text-sm text-ink disabled:opacity-50"
         >
           {versions.length === 0 ? (
             <option value={draft.current_version}>
@@ -209,7 +216,7 @@ function HistoryPanel({
               v{v.version_no}
             </button>
             {v.version_no === current && (
-              <span className="text-[9px] uppercase text-violet">current</span>
+              <span className="text-[9px] uppercase text-violet-bright">current</span>
             )}
             <time className="ml-auto text-[9px] text-ink-dim" dateTime={v.created_at}>
               {formatTs(v.created_at)}

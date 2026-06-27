@@ -15,13 +15,17 @@ export function DesktopIcon({ module }: { module: ModuleId }) {
 
   return (
     <button
-      onClick={() => setSelected(true)}
-      onDoubleClick={launch}
+      onClick={launch}
+      onFocus={() => setSelected(true)}
       onBlur={() => setSelected(false)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') launch();
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          launch();
+        }
       }}
       aria-label={`Open ${meta.title}`}
+      title={`Open ${meta.title}`}
       className={[
         'group flex w-20 flex-col items-center gap-1 rounded-pixel p-2 transition-colors',
         selected ? 'bg-violet/25 outline outline-1 outline-violet' : 'hover:bg-white/5',

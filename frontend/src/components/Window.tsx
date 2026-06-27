@@ -2,8 +2,9 @@
 // resize on the bottom-right grip. Geometry is committed to the windowStore on
 // pointer up (cheap) and tracked locally during the gesture for smoothness.
 
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useWindowStore, type WinState } from '@/stores/windowStore';
+import { ModuleStoresProvider } from '@/stores/ModuleStores';
 
 interface WindowProps {
   win: WinState;
@@ -11,11 +12,28 @@ interface WindowProps {
 }
 
 const TASKBAR_H = 40;
+const TITLEBAR_H = 28;
+// Keep at least this much of the titlebar on-screen so a window can never be
+// dragged fully out of reach.
+const MIN_VISIBLE = 120;
 
 export function Window({ win, children }: WindowProps) {
-  const { focus, close, toggleMinimize, toggleMaximize, move, resize } =
+  const { focus, close, toggleMinimize, toggleMaximize, move, resize, openInstance } =
     useWindowStore();
   const focused = useWindowStore((s) => s.focusedId === win.id);
+
+  const sectionRef = useRef<HTMLElement>(null);
+
+  // When this window becomes the focused one *and* keyboard focus was orphaned
+  // (e.g. the previously-focused window just closed, dropping focus to <body>),
+  // pull focus into this window so keyboard users aren't stranded.
+  useEffect(() => {
+    if (!focused) return;
+    const active = document.activeElement;
+    if (active === document.body || active === null) {
+      sectionRef.current?.focus();
+    }
+  }, [focused]);
 
   // Live geometry during a drag/resize gesture (avoids store churn per frame).
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
@@ -53,8 +71,11 @@ export function Window({ win, children }: WindowProps) {
     (e: React.PointerEvent) => {
       const g = gesture.current;
       if (!g) return;
-      const nx = Math.max(0, g.base + (e.clientX - g.startX));
-      const ny = Math.max(0, g.base2 + (e.clientY - g.startY));
+      // Clamp so the titlebar can't leave the viewport on any edge.
+      const maxX = Math.max(0, window.innerWidth - MIN_VISIBLE);
+      const maxY = Math.max(0, window.innerHeight - TASKBAR_H - TITLEBAR_H);
+      const nx = Math.min(Math.max(0, g.base + (e.clientX - g.startX)), maxX);
+      const ny = Math.min(Math.max(0, g.base2 + (e.clientY - g.startY)), maxY);
       setDrag({ x: nx, y: ny });
     },
     [],
@@ -101,9 +122,11 @@ export function Window({ win, children }: WindowProps) {
 
   return (
     <section
+      ref={sectionRef}
       role="dialog"
       aria-label={win.title}
       aria-modal={false}
+      tabIndex={-1}
       onPointerDown={() => focus(win.id)}
       style={{
         left: rect.x,
@@ -127,7 +150,7 @@ export function Window({ win, children }: WindowProps) {
           'flex h-7 shrink-0 select-none items-center gap-2 px-2',
           'cursor-grab active:cursor-grabbing',
           focused
-            ? 'bg-gradient-to-r from-violet to-[#6f2fcf] text-white'
+            ? 'bg-gradient-to-r from-violet to-violet-deep text-white'
             : 'bg-border text-ink-dim',
         ].join(' ')}
       >
@@ -135,6 +158,12 @@ export function Window({ win, children }: WindowProps) {
           {win.title}
         </span>
         <div className="ml-auto flex items-center gap-1">
+          <TitleButton
+            label="Open another window"
+            onClick={() => openInstance(win.module, win.title)}
+          >
+            ⧉
+          </TitleButton>
           <TitleButton label="Minimize" onClick={() => toggleMinimize(win.id)}>
             _
           </TitleButton>
@@ -147,9 +176,9 @@ export function Window({ win, children }: WindowProps) {
         </div>
       </header>
 
-      {/* Body */}
+      {/* Body — each window gets an isolated set of module stores. */}
       <div className="min-h-0 flex-1 overflow-auto bg-bg p-3 pixel-inset">
-        {children}
+        <ModuleStoresProvider windowId={win.id}>{children}</ModuleStoresProvider>
       </div>
 
       {/* Resize grip */}
@@ -159,7 +188,7 @@ export function Window({ win, children }: WindowProps) {
           onPointerMove={onResizePointerMove}
           onPointerUp={onResizePointerUp}
           aria-hidden
-          className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize"
+          className="absolute bottom-0 right-0 h-5 w-5 cursor-nwse-resize"
           style={{
             background:
               'repeating-linear-gradient(135deg, var(--color-border) 0 2px, transparent 2px 4px)',
@@ -187,7 +216,7 @@ function TitleButton({
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onClick}
       className={[
-        'pixel-raised flex h-4 w-4 items-center justify-center rounded-pixel',
+        'pixel-raised flex h-5 w-5 items-center justify-center rounded-pixel',
         'bg-card text-[10px] leading-none text-ink active:pixel-inset',
         danger ? 'hover:bg-red hover:text-white' : 'hover:brightness-125',
       ].join(' ')}

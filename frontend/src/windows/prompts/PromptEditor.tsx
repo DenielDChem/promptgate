@@ -4,8 +4,10 @@
 // prevented for both).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { usePromptsStore } from '@/stores/promptsStore';
+import { usePromptsStore, usePromptsStoreApi } from '@/stores/promptsStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useWindowStore } from '@/stores/windowStore';
+import { useWindowId } from '@/stores/ModuleStores';
 import { moduleAccess } from '@/lib/rbac';
 import { PixelButton } from '@/components/PixelButton';
 import { OutlinePane } from './OutlinePane';
@@ -21,6 +23,10 @@ export function PromptEditor() {
   const editorError = usePromptsStore((s) => s.editorError);
   const findings = usePromptsStore((s) => s.findings);
   const linting = usePromptsStore((s) => s.linting);
+  const dirty = usePromptsStore((s) => s.dirty);
+  const promptsApi = usePromptsStoreApi();
+  const setCloseGuard = useWindowStore((s) => s.setCloseGuard);
+  const windowId = useWindowId();
 
   const closeEditor = usePromptsStore((s) => s.closeEditor);
   const setTemplate = usePromptsStore((s) => s.setTemplate);
@@ -44,6 +50,35 @@ export function PromptEditor() {
     setRelintNonce((n) => n + 1);
   }, []);
 
+  // Unsaved-edits guard — read dirty at call time so the predicate stays stable.
+  const confirmDiscard = useCallback(
+    () =>
+      !promptsApi.getState().dirty ||
+      window.confirm('You have unsaved changes. Discard them?'),
+    [promptsApi],
+  );
+
+  const guardedClose = useCallback(() => {
+    if (confirmDiscard()) closeEditor();
+  }, [confirmDiscard, closeEditor]);
+
+  // Veto the window ✕ while the draft is dirty (scoped to this window's id).
+  useEffect(() => {
+    setCloseGuard(windowId, confirmDiscard);
+    return () => setCloseGuard(windowId, null);
+  }, [setCloseGuard, confirmDiscard, windowId]);
+
+  // Warn on browser-level navigation (refresh / tab close) with unsaved edits.
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
+
   // Global hotkeys (window-scoped: only meaningful while editor is mounted).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -62,10 +97,10 @@ export function PromptEditor() {
   }, [doSave, doRelint]);
 
   return (
-    <div className="flex h-full flex-col gap-2">
+    <div className="@container flex h-full flex-col gap-2">
       {/* Header bar */}
       <div className="flex shrink-0 items-center gap-2">
-        <PixelButton onClick={closeEditor} aria-label="Back to list">
+        <PixelButton onClick={guardedClose} aria-label="Back to list">
           ← List
         </PixelButton>
         <h2 className="truncate font-mono text-sm uppercase tracking-widest text-neon-dim">
@@ -94,7 +129,7 @@ export function PromptEditor() {
           </span>
         </div>
       ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-[22%_53%_25%] gap-2">
+        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(18rem,1fr)_auto] gap-2 overflow-auto @2xl:grid-cols-[22%_53%_25%] @2xl:grid-rows-1 @2xl:overflow-hidden">
           <OutlinePane
             template={draft.template}
             onJump={(line) => revealRef.current?.(line)}

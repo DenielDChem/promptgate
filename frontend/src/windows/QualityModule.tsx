@@ -7,6 +7,9 @@ import { useEffect, useState } from 'react';
 import { useValidatorStore } from '@/stores/validatorStore';
 import { ColorDot } from '@/components/ColorDot';
 import { PixelButton } from '@/components/PixelButton';
+import { StatCard } from '@/components/StatCard';
+import { ModuleHeader } from '@/components/ModuleHeader';
+import { Th, interactiveRowProps } from '@/components/DataTable';
 import { gradeQuality } from '@/lib/quality';
 import { ResultsTable } from './validator/ResultsTable';
 import type { QualityRow } from '@/lib/types';
@@ -30,13 +33,7 @@ export function QualityModule() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="flex shrink-0 items-center gap-2">
-        <h2 className="font-mono text-sm uppercase tracking-widest text-neon-dim">
-          Quality
-        </h2>
-        <span className="font-mono text-[11px] text-ink-dim">
-          ({dashboard.length})
-        </span>
+      <ModuleHeader title="Quality" count={dashboard.length}>
         <PixelButton
           onClick={() => void loadDashboard()}
           aria-label="Refresh dashboard"
@@ -44,7 +41,7 @@ export function QualityModule() {
         >
           ↻
         </PixelButton>
-      </div>
+      </ModuleHeader>
 
       {error && (
         <p
@@ -91,16 +88,11 @@ function Widgets({ rows }: { rows: QualityRow[] }) {
 
 function Widget({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
-    <div className="pixel-raised rounded-pixel flex flex-col gap-1 bg-card px-3 py-2">
-      <span className="font-mono text-[10px] uppercase tracking-wide text-ink-dim">
-        {label}
-      </span>
-      <span
-        className={['font-mono text-xl', warn ? 'text-orange' : 'text-ink'].join(' ')}
-      >
-        {value}
-      </span>
-    </div>
+    <StatCard
+      label={label}
+      value={value}
+      valueClassName={warn ? 'text-orange' : 'text-ink'}
+    />
   );
 }
 
@@ -112,7 +104,7 @@ function QualityTable({
   onSelect: (row: QualityRow) => void;
 }) {
   return (
-    <table className="w-full border-collapse font-mono text-xs">
+    <table className="w-full border-collapse font-mono text-xs tabular-nums">
       <thead className="sticky top-0 z-10 bg-card text-[10px] uppercase tracking-wide text-ink-dim">
         <tr>
           <Th />
@@ -127,12 +119,7 @@ function QualityTable({
         {rows.map((r) => (
           <tr
             key={r.prompt_id}
-            tabIndex={0}
-            onClick={() => onSelect(r)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') onSelect(r);
-            }}
-            className="cursor-pointer border-b border-border text-ink hover:bg-violet/15 focus:bg-violet/20 focus:outline-none"
+            {...interactiveRowProps(`View quality history for ${r.name}`, () => onSelect(r))}
           >
             <td className="px-2 py-1.5">
               <ColorDot color={r.color} metric={r.name} />
@@ -196,11 +183,11 @@ function PromptDetail({ row, onBack }: { row: QualityRow; onBack: () => void }) 
               <li key={r.run_id}>
                 <button
                   onClick={() => void viewRun(r.run_id)}
-                  className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-ink hover:bg-violet/15 focus:bg-violet/20 focus:outline-none"
+                  className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-ink hover:bg-violet/15 focus:bg-violet/20"
                 >
                   <ColorDot color={gradeQuality(r.comprehension, r.hallucination)} />
                   <span className="text-ink-dim">{formatDate(r.created_at)}</span>
-                  <span className="text-violet">{r.model_id}</span>
+                  <span className="text-violet-bright">{r.model_id}</span>
                   <span className="ml-auto text-ink-dim">
                     {r.comprehension.toFixed(1)}/{r.hallucination.toFixed(1)} ·{' '}
                     {Math.round(r.determinism)}%
@@ -228,18 +215,14 @@ function PromptDetail({ row, onBack }: { row: QualityRow; onBack: () => void }) 
 function EmptyState() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-      <span className="text-4xl text-violet" aria-hidden>
-        📊
+      <span className="text-4xl text-violet-bright" aria-hidden>
+        ▥
       </span>
       <p className="font-mono text-xs text-ink-dim">
         No validated prompts yet. Run a validation to populate the dashboard.
       </p>
     </div>
   );
-}
-
-function Th({ children, className = '' }: { children?: React.ReactNode; className?: string }) {
-  return <th className={`px-2 py-1.5 text-left font-normal ${className}`}>{children}</th>;
 }
 
 function mean(xs: number[]): number {

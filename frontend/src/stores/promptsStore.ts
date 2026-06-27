@@ -6,9 +6,12 @@
 // Bearer header by the api client). All network failures surface as a string
 // in `error` / `editorError` rather than throwing into React.
 
-import { create } from 'zustand';
+import { createContext, useContext } from 'react';
+import { createStore } from 'zustand/vanilla';
+import { useStore } from 'zustand';
 import { ApiError, lintApi, promptsApi } from '@/api/client';
 import { useAuthStore } from '@/stores/authStore';
+import { toast } from '@/stores/toastStore';
 import type {
   LintFinding,
   PromptConfig,
@@ -111,7 +114,10 @@ const EMPTY_DRAFT: Draft = {
   isNew: true,
 };
 
-export const usePromptsStore = create<PromptsState>((set, get) => ({
+/** Per-window store factory — each editor window owns an isolated draft so two
+ *  prompt editors can be open side by side without clobbering each other. */
+export function createPromptsStore() {
+  return createStore<PromptsState>((set, get) => ({
   view: 'list',
   list: [],
   listLoading: false,
@@ -185,9 +191,12 @@ export const usePromptsStore = create<PromptsState>((set, get) => ({
     try {
       await promptsApi.remove(id, t);
       set((s) => ({ list: s.list.filter((p) => p.id !== id) }));
+      toast.success(`Prompt ${id} moved to trash.`);
       return true;
     } catch (err) {
-      set({ error: messageOf(err) });
+      const msg = messageOf(err);
+      set({ error: msg });
+      toast.error(`Couldn't delete ${id}: ${msg}`);
       return false;
     }
   },
@@ -229,6 +238,11 @@ export const usePromptsStore = create<PromptsState>((set, get) => ({
           ? { ...s.draft, current_version: res.version, isNew: false }
           : s.draft,
       }));
+      toast.success(
+        message === 'publish'
+          ? `Published ${res.id} · v${res.version}`
+          : `Saved ${res.id} · v${res.version}`,
+      );
       void get().loadVersions();
       void get().loadList();
       return true;
@@ -327,4 +341,22 @@ export const usePromptsStore = create<PromptsState>((set, get) => ({
       set({ linting: false });
     }
   },
-}));
+  }));
+}
+
+export type PromptsStoreApi = ReturnType<typeof createPromptsStore>;
+
+const PromptsStoreContext = createContext<PromptsStoreApi | null>(null);
+export const PromptsStoreProvider = PromptsStoreContext.Provider;
+
+/** The raw store instance for the current window (imperative get/setState). */
+export function usePromptsStoreApi(): PromptsStoreApi {
+  const api = useContext(PromptsStoreContext);
+  if (!api) throw new Error('usePromptsStore used outside a window provider');
+  return api;
+}
+
+/** Selector hook bound to the current window's prompts store. */
+export function usePromptsStore<T>(selector: (s: PromptsState) => T): T {
+  return useStore(usePromptsStoreApi(), selector);
+}

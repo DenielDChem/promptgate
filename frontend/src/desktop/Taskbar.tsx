@@ -1,7 +1,7 @@
 // Bottom taskbar: Start button (PG logo) + start menu, open-window buttons,
 // clock, current-user chip with logout.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useWindowStore } from '@/stores/windowStore';
 import { useAuthStore } from '@/stores/authStore';
 import { visibleModules } from '@/lib/rbac';
@@ -18,13 +18,34 @@ export function Taskbar() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const [menuOpen, setMenuOpen] = useState(false);
+  const startRef = useRef<HTMLDivElement>(null);
 
   const modules = visibleModules(user?.role ?? 'guest');
 
+  // Start menu: Esc + click-outside close, focus first item on open.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    const onClick = (e: MouseEvent) => {
+      if (startRef.current && !startRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('click', onClick);
+    startRef.current?.querySelector<HTMLElement>('ul button')?.focus();
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('click', onClick);
+    };
+  }, [menuOpen]);
+
   return (
-    <footer className="pixel-raised relative z-[8000] flex h-10 shrink-0 items-center gap-2 border-t border-border bg-card px-2">
+    <footer className="pixel-raised relative z-[var(--z-taskbar)] flex h-10 shrink-0 items-center gap-2 border-t border-border bg-card px-2">
       {/* Start button */}
-      <div className="relative">
+      <div className="relative" ref={startRef}>
         <button
           onClick={() => setMenuOpen((v) => !v)}
           aria-expanded={menuOpen}
@@ -78,7 +99,7 @@ export function Taskbar() {
                 : 'pixel-raised bg-card text-ink hover:brightness-125',
             ].join(' ')}
           >
-            {MODULE_META[w.module].glyph} {w.title}
+            <span aria-hidden>{MODULE_META[w.module].glyph}</span> {w.title}
           </button>
         ))}
       </div>
@@ -90,7 +111,7 @@ export function Taskbar() {
         <div className="flex items-center gap-2">
           <span className="pixel-inset rounded-pixel bg-bg px-2 py-1 font-mono text-xs">
             <span className="text-ink-dim">{user.username}</span>
-            <span className="ml-1.5 text-[10px] uppercase text-violet">
+            <span className="ml-1.5 text-[10px] uppercase text-violet-bright">
               [{user.role}]
             </span>
           </span>

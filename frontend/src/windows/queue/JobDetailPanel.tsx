@@ -28,7 +28,15 @@ export function JobDetailPanel({ onBack }: { onBack: () => void }) {
           <PixelButton
             variant="danger"
             className="ml-auto"
-            onClick={() => void cancelJob(detail.id)}
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Cancel job ${detail.id}? Work in progress will be discarded.`,
+                )
+              ) {
+                void cancelJob(detail.id);
+              }
+            }}
           >
             Cancel
           </PixelButton>

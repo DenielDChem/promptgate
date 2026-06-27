@@ -1,13 +1,17 @@
 // Create-job modal (P4 §9.4): type / target prompt / model / priority pickers.
 // Submit → POST /api/jobs via the store, which refreshes the table and closes us.
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useJobsStore, JOB_TYPE_LABELS, JOB_PRIORITY_LABELS } from '@/stores/jobsStore';
 import { PixelButton } from '@/components/PixelButton';
+import { PixelSelect } from '@/components/PixelSelect';
 import type { JobPriority, JobType } from '@/lib/types';
 
 const JOB_TYPES: JobType[] = ['validation', 'generation', 'mass_test'];
 const PRIORITIES: JobPriority[] = ['high', 'medium', 'low'];
+
+const FOCUSABLE =
+  'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 export function CreateJobModal({ onClose }: { onClose: () => void }) {
   const prompts = useJobsStore((s) => s.prompts);
@@ -22,6 +26,10 @@ export function CreateJobModal({ onClose }: { onClose: () => void }) {
   const [promptId, setPromptId] = useState('');
   const [modelId, setModelId] = useState('');
   const [priority, setPriority] = useState<JobPriority>('medium');
+  const [touched, setTouched] = useState(false);
+
+  const panelRef = useRef<HTMLDivElement>(null);
+  const prevFocus = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     void loadLookups();
@@ -35,14 +43,45 @@ export function CreateJobModal({ onClose }: { onClose: () => void }) {
     setModelId((cur) => cur || models[0] || '');
   }, [models]);
 
-  // Esc closes the modal.
+  // Don't discard a half-filled form on an accidental backdrop/Esc dismiss.
+  const attemptClose = useCallback(() => {
+    if (touched && !window.confirm('Discard this job?')) return;
+    onClose();
+  }, [touched, onClose]);
+
+  // Move focus into the dialog on open; restore it to the trigger on close.
+  useEffect(() => {
+    prevFocus.current = document.activeElement as HTMLElement | null;
+    const first = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
+    (first ?? panelRef.current)?.focus();
+    return () => prevFocus.current?.focus?.();
+  }, []);
+
+  // Esc closes (with discard-guard).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') attemptClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [attemptClose]);
+
+  // Trap Tab focus inside the dialog.
+  const onPanelKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Tab') return;
+    const items = panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE);
+    if (!items || items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey && active === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
 
   const submit = async () => {
     const job = await create({
@@ -58,20 +97,22 @@ export function CreateJobModal({ onClose }: { onClose: () => void }) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Create job"
+      aria-labelledby="cjm-title"
       className="absolute inset-0 z-30 flex items-center justify-center bg-bg/70 p-4"
-      onClick={onClose}
+      onClick={attemptClose}
     >
       <div
+        ref={panelRef}
+        onKeyDown={onPanelKeyDown}
         className="pixel-raised rounded-pixel w-full max-w-md bg-card p-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center gap-2">
-          <h3 className="font-mono text-sm uppercase tracking-widest text-neon-dim">
+          <h3 id="cjm-title" className="font-mono text-sm uppercase tracking-widest text-neon-dim">
             New job
           </h3>
           <button
-            onClick={onClose}
+            onClick={attemptClose}
             aria-label="Close"
             className="ml-auto rounded-pixel px-1.5 py-0.5 font-mono text-ink-dim hover:bg-red hover:text-white"
           >
@@ -89,38 +130,42 @@ export function CreateJobModal({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="flex flex-col gap-3">
-          <Select
+          <PixelSelect
             label="Type"
             value={type}
-            onChange={(v) => setType(v as JobType)}
+            onChange={(v) => { setType(v as JobType); setTouched(true); }}
             options={JOB_TYPES.map((t) => ({ value: t, label: JOB_TYPE_LABELS[t] }))}
           />
-          <Select
+          <PixelSelect
             label="Target prompt"
             value={promptId}
             disabled={lookupsLoading}
-            onChange={setPromptId}
+            invalid={!lookupsLoading && !promptId}
+            invalidHint="Pick a prompt to run the job against."
+            onChange={(v) => { setPromptId(v); setTouched(true); }}
             options={prompts.map((p) => ({ value: p.id, label: `${p.name} (${p.id})` }))}
             placeholder={lookupsLoading ? 'loading…' : 'no prompts'}
           />
-          <Select
+          <PixelSelect
             label="Model"
             value={modelId}
             disabled={lookupsLoading}
-            onChange={setModelId}
+            invalid={!lookupsLoading && !modelId}
+            invalidHint="Pick a model for this job."
+            onChange={(v) => { setModelId(v); setTouched(true); }}
             options={models.map((m) => ({ value: m, label: m }))}
             placeholder={lookupsLoading ? 'loading…' : 'no models'}
           />
-          <Select
+          <PixelSelect
             label="Priority"
             value={priority}
-            onChange={(v) => setPriority(v as JobPriority)}
+            onChange={(v) => { setPriority(v as JobPriority); setTouched(true); }}
             options={PRIORITIES.map((p) => ({ value: p, label: JOB_PRIORITY_LABELS[p] }))}
           />
         </div>
 
         <div className="mt-4 flex justify-end gap-2">
-          <PixelButton onClick={onClose} disabled={creating}>
+          <PixelButton onClick={attemptClose} disabled={creating}>
             Cancel
           </PixelButton>
           <PixelButton variant="primary" onClick={() => void submit()} disabled={creating}>
@@ -132,34 +177,3 @@ export function CreateJobModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-interface SelectProps {
-  label: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (value: string) => void;
-  disabled?: boolean;
-  placeholder?: string;
-}
-
-function Select({ label, value, options, onChange, disabled, placeholder }: SelectProps) {
-  return (
-    <label className="flex min-w-0 flex-col gap-1">
-      <span className="font-mono text-xs uppercase tracking-wide text-ink-dim">
-        {label}
-      </span>
-      <select
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-        className="pixel-inset rounded-pixel bg-bg px-2.5 py-1.5 font-mono text-sm text-ink focus:outline-none disabled:opacity-50"
-      >
-        {options.length === 0 && <option value="">{placeholder}</option>}
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}

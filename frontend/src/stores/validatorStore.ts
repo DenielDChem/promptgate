@@ -6,9 +6,12 @@
 // call time and auto-attached by the api client; all failures surface as a
 // string in an `*Error` field rather than throwing into React.
 
-import { create } from 'zustand';
+import { createContext, useContext } from 'react';
+import { createStore } from 'zustand/vanilla';
+import { useStore } from 'zustand';
 import { ApiError, promptsApi, validationApi } from '@/api/client';
 import { useAuthStore } from '@/stores/authStore';
+import { toast } from '@/stores/toastStore';
 import type {
   PromptSummary,
   QualityRow,
@@ -63,6 +66,7 @@ interface ValidatorState {
 
   // actions — run
   run: () => Promise<void>;
+  cancelRun: () => void;
   loadRuns: (promptId: string) => Promise<void>;
   viewRun: (runId: string) => Promise<void>;
   clearResult: () => void;
@@ -80,7 +84,13 @@ function messageOf(err: unknown): string {
   return 'Unexpected error';
 }
 
-export const useValidatorStore = create<ValidatorState>((set, get) => ({
+/** Per-window store factory — each Validator/Quality window owns its own run
+ *  lifecycle (and its own abort controller). */
+export function createValidatorStore() {
+  // Per-instance controller for the in-flight run, so `cancelRun` aborts only
+  // this window's run without threading the controller through React state.
+  let runController: AbortController | null = null;
+  return createStore<ValidatorState>((set, get) => ({
   prompts: [],
   models: [],
   lookupsLoading: false,
@@ -163,6 +173,7 @@ export const useValidatorStore = create<ValidatorState>((set, get) => ({
       .map((c) => ({ question: c.question.trim(), payload: c.payload?.trim() || undefined }))
       .filter((c) => c.question.length > 0);
 
+    runController = new AbortController();
     set({ running: true, runError: null, result: null });
     try {
       const result = await validationApi.run(
@@ -173,12 +184,26 @@ export const useValidatorStore = create<ValidatorState>((set, get) => ({
           cases: filled.length ? filled : undefined,
         },
         t,
+        runController.signal,
       );
       set({ result, running: false });
+      toast.success('Validation complete.');
       void get().loadRuns(promptId);
     } catch (err) {
-      set({ runError: messageOf(err), running: false });
+      // A user-initiated cancel is not an error: just stop, no red banner.
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        set({ running: false });
+        toast.info('Validation cancelled.');
+      } else {
+        set({ runError: messageOf(err), running: false });
+      }
+    } finally {
+      runController = null;
     }
+  },
+
+  cancelRun: () => {
+    runController?.abort();
   },
 
   loadRuns: async (promptId) => {
@@ -222,4 +247,20 @@ export const useValidatorStore = create<ValidatorState>((set, get) => ({
       set({ dashboardError: messageOf(err), dashboardLoading: false });
     }
   },
-}));
+  }));
+}
+
+export type ValidatorStoreApi = ReturnType<typeof createValidatorStore>;
+
+const ValidatorStoreContext = createContext<ValidatorStoreApi | null>(null);
+export const ValidatorStoreProvider = ValidatorStoreContext.Provider;
+
+export function useValidatorStoreApi(): ValidatorStoreApi {
+  const api = useContext(ValidatorStoreContext);
+  if (!api) throw new Error('useValidatorStore used outside a window provider');
+  return api;
+}
+
+export function useValidatorStore<T>(selector: (s: ValidatorState) => T): T {
+  return useStore(useValidatorStoreApi(), selector);
+}

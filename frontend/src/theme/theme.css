@@ -13,21 +13,37 @@
   /* Accents */
   --color-neon: #00ff9d; /* success / accent-1 */
   --color-neon-dim: #0bbf78; /* darkened neon for body text on dark (AA) */
-  --color-violet: #9d4eff; /* action / accent-2 */
+  --color-violet: #8a3ce0; /* action / accent-2 — FILL: white text passes AA (~5.5:1) */
+  --color-violet-bright: #b07cff; /* violet as TEXT on dark: ≥4.5:1 on card/bg */
+  --color-violet-deep: #6f2fcf; /* dark end of titlebar gradient */
   --color-orange: #ff6b35; /* warning */
   --color-red: #ff3b3b; /* error */
+  --color-blue: #4ea8ff; /* informational — lint "determinism" findings */
 
   /* Text */
   --color-ink: #e8e8e8;
   --color-ink-dim: #888888;
 
-  /* Fonts */
+  /* Fonts — Typography decision (P3):
+     The "terminal" aesthetic is intentional: JetBrains Mono (`font-mono`) is the
+     UI typeface for ALL chrome, controls, labels and tabular data — it is what
+     gives the product its identity. IBM Plex Sans (`font-sans`) is the document
+     body default and is reserved for long-form prose (help text, future docs
+     panels). Do not reach for `font-sans` on chrome; do not set `font-mono` on
+     prose. Numeric columns add `tabular-nums` so figures align. */
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
 
   /* 4px pixel-step radii (kept hard/small for the retro feel) */
   --radius-pixel: 2px;
   --radius-pixel-lg: 4px;
+
+  /* Z-index scale — single source of truth for chrome layering. Windows live
+     in a dynamic 1–7999 band (assigned by windowStore on focus); everything
+     below sits above that band and must stay in this order. */
+  --z-taskbar: 8000;
+  --z-context-menu: 9000;
+  --z-toast: 10000;
 
   /* Win95-style bevel shadows (raised / inset) built from hard 1-2px edges */
   --shadow-raised:

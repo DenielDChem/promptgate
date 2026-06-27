@@ -80,7 +80,7 @@ function Entry({
         className={[
           'w-full truncate rounded-pixel px-1.5 py-0.5 text-left text-xs text-ink',
           'hover:bg-violet/20 hover:text-neon',
-          mono ? 'font-mono text-violet' : 'font-mono',
+          mono ? 'font-mono text-violet-bright' : 'font-mono',
         ].join(' ')}
       >
         {label}

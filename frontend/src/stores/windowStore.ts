@@ -30,6 +30,9 @@ interface WindowStore {
   topZ: number;
 
   open: (module: ModuleId, title: string) => void;
+  /** Always spawn a fresh window for the module (multi-instance), even if one
+   *  is already open. */
+  openInstance: (module: ModuleId, title: string) => void;
   close: (id: string) => void;
   focus: (id: string) => void;
   minimize: (id: string) => void;
@@ -37,6 +40,31 @@ interface WindowStore {
   toggleMaximize: (id: string) => void;
   move: (id: string, x: number, y: number) => void;
   resize: (id: string, w: number, h: number) => void;
+  /** Re-clamp every window into the current viewport (on browser resize). */
+  clampIntoView: () => void;
+  /** Register a per-window veto run before that window closes (e.g.
+   *  unsaved-edits confirm). Returning false aborts the close. Pass null to
+   *  unregister. Keyed by window id so each instance guards independently. */
+  setCloseGuard: (windowId: string, fn: (() => boolean) | null) => void;
+}
+
+const TASKBAR_H = 40;
+const TITLEBAR_H = 28;
+const MIN_VISIBLE = 120;
+
+// Module-level (non-reactive) close guards, keyed by window id — toggling them
+// must not re-render.
+const closeGuards = new Map<string, () => boolean>();
+
+function clampRect(r: Rect): Rect {
+  const maxX = Math.max(0, window.innerWidth - MIN_VISIBLE);
+  const maxY = Math.max(0, window.innerHeight - TASKBAR_H - TITLEBAR_H);
+  return {
+    x: Math.min(Math.max(0, r.x), maxX),
+    y: Math.min(Math.max(0, r.y), maxY),
+    w: Math.min(r.w, Math.max(280, window.innerWidth)),
+    h: Math.min(r.h, Math.max(160, window.innerHeight - TASKBAR_H)),
+  };
 }
 
 const DEFAULT_SIZE = { w: 640, h: 440 };
@@ -48,6 +76,9 @@ const MODULE_SIZE: Partial<Record<ModuleId, { w: number; h: number }>> = {
   queue: { w: 980, h: 620 },
 };
 let openCount = 0;
+// Monotonic sequence guaranteeing unique window ids even for instances of the
+// same module opened in the same millisecond.
+let winSeq = 0;
 
 function spawnRect(module: ModuleId): Rect {
   // Cascade new windows so they don't stack exactly.
@@ -66,7 +97,8 @@ export const useWindowStore = create<WindowStore>((set, get) => ({
   topZ: 0,
 
   open: (module, title) => {
-    // One window per module: if already open, focus + un-minimize it.
+    // Default entry point (icons / start menu / taskbar): focus the existing
+    // window for this module, or spawn the first one.
     const existing = get().windows.find((w) => w.module === module);
     if (existing) {
       set((s) => {
@@ -81,10 +113,15 @@ export const useWindowStore = create<WindowStore>((set, get) => ({
       });
       return;
     }
+    get().openInstance(module, title);
+  },
+
+  openInstance: (module, title) => {
     set((s) => {
       const z = s.topZ + 1;
+      winSeq += 1;
       const win: WinState = {
-        id: `win-${module}-${Date.now()}`,
+        id: `win-${module}-${Date.now()}-${winSeq}`,
         module,
         title,
         rect: spawnRect(module),
@@ -97,7 +134,11 @@ export const useWindowStore = create<WindowStore>((set, get) => ({
     });
   },
 
-  close: (id) =>
+  close: (id) => {
+    // The window may veto its own close (e.g. unsaved prompt edits → confirm).
+    const guard = closeGuards.get(id);
+    if (guard && !guard()) return;
+    closeGuards.delete(id);
     set((s) => {
       const windows = s.windows.filter((w) => w.id !== id);
       const focusedId =
@@ -106,7 +147,8 @@ export const useWindowStore = create<WindowStore>((set, get) => ({
             null)
           : s.focusedId;
       return { windows, focusedId };
-    }),
+    });
+  },
 
   focus: (id) =>
     set((s) => {
@@ -167,4 +209,14 @@ export const useWindowStore = create<WindowStore>((set, get) => ({
           : win,
       ),
     })),
+
+  clampIntoView: () =>
+    set((s) => ({
+      windows: s.windows.map((w) => ({ ...w, rect: clampRect(w.rect) })),
+    })),
+
+  setCloseGuard: (windowId, fn) => {
+    if (fn) closeGuards.set(windowId, fn);
+    else closeGuards.delete(windowId);
+  },
 }));

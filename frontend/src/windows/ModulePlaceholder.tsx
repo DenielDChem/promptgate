@@ -12,7 +12,7 @@ export function ModulePlaceholder({ module }: { module: ModuleId }) {
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-      <span className="text-5xl text-violet" aria-hidden>
+      <span className="text-5xl text-violet-bright" aria-hidden>
         {meta.glyph}
       </span>
       <h2 className="font-mono text-lg uppercase tracking-widest text-neon-dim">

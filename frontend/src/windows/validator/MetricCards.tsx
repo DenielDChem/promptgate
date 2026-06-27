@@ -3,6 +3,7 @@
 // is explicitly labelled "lower is better" since it inverts the usual reading.
 
 import { ColorDot } from '@/components/ColorDot';
+import { StatCard } from '@/components/StatCard';
 import {
   gradeComprehension,
   gradeDeterminism,
@@ -51,22 +52,12 @@ interface CardProps {
 
 function Card({ label, value, color, hint, warn }: CardProps) {
   return (
-    <div className="pixel-raised rounded-pixel flex flex-col gap-1 bg-card px-3 py-2">
-      <div className="flex items-center gap-1.5">
-        {color && <ColorDot color={color} metric={label} />}
-        <span className="font-mono text-[10px] uppercase tracking-wide text-ink-dim">
-          {label}
-        </span>
-      </div>
-      <span className="font-mono text-xl text-ink">{value}</span>
-      <span
-        className={[
-          'font-mono text-[10px]',
-          warn ? 'text-orange' : 'text-ink-dim/70',
-        ].join(' ')}
-      >
-        {hint}
-      </span>
-    </div>
+    <StatCard
+      label={label}
+      value={value}
+      dot={color && <ColorDot color={color} metric={label} />}
+      hint={hint}
+      hintClassName={warn ? 'text-orange' : 'text-ink-dim/70'}
+    />
   );
 }

@@ -45,11 +45,11 @@ function RunRow({ run, onClick }: { run: ValidationRunSummary; onClick: () => vo
     <li>
       <button
         onClick={onClick}
-        className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-ink hover:bg-violet/15 focus:bg-violet/20 focus:outline-none"
+        className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-ink hover:bg-violet/15 focus:bg-violet/20"
       >
         <ColorDot color={gradeQuality(run.comprehension, run.hallucination)} />
         <span className="text-ink-dim">{formatDate(run.created_at)}</span>
-        <span className="text-violet">{run.model_id}</span>
+        <span className="text-violet-bright">{run.model_id}</span>
         <span className="ml-auto text-ink-dim">
           {run.comprehension.toFixed(1)}/{run.hallucination.toFixed(1)} ·{' '}
           {Math.round(run.determinism)}%

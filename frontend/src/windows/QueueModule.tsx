@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useJobsStore } from '@/stores/jobsStore';
 import { PixelButton } from '@/components/PixelButton';
+import { ModuleHeader } from '@/components/ModuleHeader';
 import { JobsTable } from './queue/JobsTable';
 import { CreateJobModal } from './queue/CreateJobModal';
 import { JobDetailPanel } from './queue/JobDetailPanel';
@@ -38,6 +39,12 @@ export function QueueModule() {
     void viewJob(id);
     setDetailOpen(true);
   };
+  // Cancelling an in-flight job is destructive — confirm first.
+  const confirmCancel = (id: string) => {
+    if (window.confirm(`Cancel job ${id}? Work in progress will be discarded.`)) {
+      void cancelJob(id);
+    }
+  };
   const backToTable = () => {
     setDetailOpen(false);
     clearDetail();
@@ -49,11 +56,7 @@ export function QueueModule() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col gap-3">
-      <div className="flex shrink-0 items-center gap-2">
-        <h2 className="font-mono text-sm uppercase tracking-widest text-neon-dim">
-          Task Queue
-        </h2>
-        <span className="font-mono text-[11px] text-ink-dim">async jobs</span>
+      <ModuleHeader title="Task Queue" subtitle="async jobs">
         <PixelButton
           variant="action"
           className="ml-auto"
@@ -61,7 +64,7 @@ export function QueueModule() {
         >
           + New job
         </PixelButton>
-      </div>
+      </ModuleHeader>
 
       <StatusBar summary={summary} />
 
@@ -82,7 +85,7 @@ export function QueueModule() {
         ) : jobs.length === 0 ? (
           <EmptyState onCreate={() => setShowCreate(true)} />
         ) : (
-          <JobsTable jobs={jobs} onSelect={openDetail} onCancel={cancelJob} />
+          <JobsTable jobs={jobs} onSelect={openDetail} onCancel={confirmCancel} />
         )}
       </div>
 
@@ -94,8 +97,13 @@ export function QueueModule() {
 /** `Active: N │ Queued: N │ Completed: N` (spec §9.2). */
 function StatusBar({ summary }: { summary: JobSummaryCounts }) {
   return (
-    <div className="pixel-raised rounded-pixel flex shrink-0 items-center gap-3 bg-card px-3 py-2 font-mono text-xs">
-      <Stat label="Active" value={summary.running} className="text-violet" />
+    <div
+      role="status"
+      aria-live="polite"
+      aria-label={`Active ${summary.running}, queued ${summary.queued}, completed ${summary.completed}, failed ${summary.failed}`}
+      className="pixel-raised rounded-pixel flex shrink-0 items-center gap-3 bg-card px-3 py-2 font-mono text-xs tabular-nums"
+    >
+      <Stat label="Active" value={summary.running} className="text-violet-bright" />
       <Sep />
       <Stat label="Queued" value={summary.queued} className="text-ink" />
       <Sep />
@@ -125,8 +133,8 @@ function Sep() {
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-      <span className="text-4xl text-violet" aria-hidden>
-        ⏳
+      <span className="text-4xl text-violet-bright" aria-hidden>
+        ◷
       </span>
       <p className="font-mono text-xs text-ink-dim">
         No jobs yet. Queue a validation, template generation, or mass test.

@@ -59,7 +59,12 @@ export function ResultPanel() {
 
 function RunningState() {
   return (
-    <div className="pixel-inset rounded-pixel flex min-h-0 flex-1 flex-col gap-1 overflow-auto bg-bg p-3 font-mono text-xs">
+    <div
+      role="status"
+      aria-live="polite"
+      aria-label="Validation running"
+      className="pixel-inset rounded-pixel flex min-h-0 flex-1 flex-col gap-1 overflow-auto bg-bg p-3 font-mono text-xs"
+    >
       <p className="text-neon-dim">$ pgate validate --deep</p>
       <p className="text-ink-dim">› spinning up runner…</p>
       <p className="text-ink-dim">› sampling answers across repeats…</p>
@@ -74,7 +79,7 @@ function RunningState() {
 function EmptyResult() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-      <span className="text-5xl text-violet" aria-hidden>
+      <span className="text-5xl text-violet-bright" aria-hidden>
         ◉
       </span>
       <p className="max-w-xs font-mono text-xs text-ink-dim">

@@ -37,6 +37,15 @@ interface RequestOptions {
   method?: string;
   body?: unknown;
   token?: string | null;
+  signal?: AbortSignal;
+}
+
+// Global "session expired" hook. Registered by the app root (App.tsx) to avoid
+// a client↔authStore import cycle. Fires when an *authenticated* request (one
+// that carried a token) comes back 401 — i.e. the JWT was rejected mid-session.
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(fn: (() => void) | null): void {
+  onUnauthorized = fn;
 }
 
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
@@ -50,13 +59,20 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
       method: opts.method ?? 'GET',
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      signal: opts.signal,
     });
-  } catch {
+  } catch (err) {
+    // A caller-initiated abort must stay an AbortError so callers can tell
+    // "user cancelled" apart from "backend down" — never mask it as network.
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
     throw new ApiError(0, 'Network error — backend unreachable');
   }
 
   if (!res.ok) {
     const detail = await extractError(res);
+    // A 401 on a token-bearing request means the session lapsed — let the app
+    // tear it down. (Login/register send no token, so bad creds don't trip it.)
+    if (res.status === 401 && opts.token) onUnauthorized?.();
     throw new ApiError(res.status, detail);
   }
 
@@ -172,11 +188,12 @@ export const validationApi = {
   models: (token: string) => request<string[]>('/models', { token }),
 
   /** Kick off a deep validation run for a prompt. May take a while. */
-  run: (id: string, payload: ValidatePayload, token: string) =>
+  run: (id: string, payload: ValidatePayload, token: string, signal?: AbortSignal) =>
     request<ValidationRun>(`/prompts/${encodeURIComponent(id)}/validate`, {
       method: 'POST',
       body: payload,
       token,
+      signal,
     }),
 
   /** Aggregate quality for one prompt (404 → never validated). */

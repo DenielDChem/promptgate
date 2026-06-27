@@ -9,9 +9,12 @@
 // then on an interval; `stopPolling` clears it. The Queue window mounts/unmounts
 // these so we never poll while the window is closed (spec §9.3).
 
-import { create } from 'zustand';
+import { createContext, useContext } from 'react';
+import { createStore } from 'zustand/vanilla';
+import { useStore } from 'zustand';
 import { ApiError, jobsApi, promptsApi, validationApi } from '@/api/client';
 import { useAuthStore } from '@/stores/authStore';
+import { toast } from '@/stores/toastStore';
 import type {
   JobCreatePayload,
   JobDetail,
@@ -84,7 +87,10 @@ function messageOf(err: unknown): string {
   return 'Unexpected error';
 }
 
-export const useJobsStore = create<JobsState>((set, get) => ({
+/** Per-window store factory — each Queue window owns its own polling loop and
+ *  selected-job detail. */
+export function createJobsStore() {
+  return createStore<JobsState>((set, get) => ({
   jobs: [],
   summary: EMPTY_COUNTS,
   loading: false,
@@ -162,6 +168,7 @@ export const useJobsStore = create<JobsState>((set, get) => ({
     try {
       const job = await jobsApi.create(payload, t);
       set({ creating: false });
+      toast.success(`Job ${job.id} queued.`);
       void get().refresh();
       return job;
     } catch (err) {
@@ -189,17 +196,36 @@ export const useJobsStore = create<JobsState>((set, get) => ({
     if (!t) return;
     try {
       await jobsApi.cancel(id, t);
+      toast.info(`Cancel requested for ${id}.`);
     } catch (err) {
       // A 409 just means the job already finished — surface other errors only.
       if (!(err instanceof ApiError) || err.status !== 409) {
-        set({ listError: messageOf(err) });
+        const msg = messageOf(err);
+        set({ listError: msg });
+        toast.error(`Couldn't cancel ${id}: ${msg}`);
       }
     } finally {
       void get().refresh();
       if (get().detail?.id === id) void get().viewJob(id);
     }
   },
-}));
+  }));
+}
+
+export type JobsStoreApi = ReturnType<typeof createJobsStore>;
+
+const JobsStoreContext = createContext<JobsStoreApi | null>(null);
+export const JobsStoreProvider = JobsStoreContext.Provider;
+
+export function useJobsStoreApi(): JobsStoreApi {
+  const api = useContext(JobsStoreContext);
+  if (!api) throw new Error('useJobsStore used outside a window provider');
+  return api;
+}
+
+export function useJobsStore<T>(selector: (s: JobsState) => T): T {
+  return useStore(useJobsStoreApi(), selector);
+}
 
 export const JOB_TYPE_LABELS: Record<JobType, string> = {
   validation: 'Validation',

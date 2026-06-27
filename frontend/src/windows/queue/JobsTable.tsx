@@ -3,6 +3,7 @@
 // Rows are clickable → open the job detail. Polling is owned by the store.
 
 import { JOB_TYPE_LABELS } from '@/stores/jobsStore';
+import { Th, interactiveRowProps } from '@/components/DataTable';
 import { JobStatusBadge, JobProgressBar } from './JobBits';
 import { isActive } from './jobStatus';
 import type { JobSummary } from '@/lib/types';
@@ -27,18 +28,10 @@ export function JobsTable({ jobs, onSelect, onCancel }: JobsTableProps) {
       </thead>
       <tbody>
         {jobs.map((j) => (
-          <tr
-            key={j.id}
-            tabIndex={0}
-            onClick={() => onSelect(j.id)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') onSelect(j.id);
-            }}
-            className="cursor-pointer border-b border-border text-ink hover:bg-violet/15 focus:bg-violet/20 focus:outline-none"
-          >
+          <tr key={j.id} {...interactiveRowProps(`Open job ${j.id}`, () => onSelect(j.id))}>
             <td className="px-2 py-1.5 text-ink-dim">{j.id}</td>
             <td className="px-2 py-1.5">
-              <span className="text-violet">{JOB_TYPE_LABELS[j.type]}</span>
+              <span className="text-violet-bright">{JOB_TYPE_LABELS[j.type]}</span>
               {j.prompt_id && (
                 <span className="ml-1 text-ink-dim">· {j.prompt_id}</span>
               )}
@@ -83,6 +76,3 @@ export function JobsTable({ jobs, onSelect, onCancel }: JobsTableProps) {
   );
 }
 
-function Th({ children, className = '' }: { children?: React.ReactNode; className?: string }) {
-  return <th className={`px-2 py-1.5 text-left font-normal ${className}`}>{children}</th>;
-}

@@ -1,21 +1,13 @@
 // Small presentational pieces shared by the jobs table + job detail (P4):
 // the status pill and the terminal-style progress bar.
 
+import { StatusPill } from '@/components/StatusPill';
 import type { JobStatus } from '@/lib/types';
 import { JOB_STATUS_CLASS, fractionOf, isActive, progressBar } from './jobStatus';
 
 /** Pixel-styled lifecycle pill, mirroring StatusBadge for draft/published. */
 export function JobStatusBadge({ status }: { status: JobStatus }) {
-  return (
-    <span
-      className={[
-        'pixel-raised rounded-pixel px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide',
-        JOB_STATUS_CLASS[status],
-      ].join(' ')}
-    >
-      {status}
-    </span>
-  );
+  return <StatusPill className={JOB_STATUS_CLASS[status]}>{status}</StatusPill>;
 }
 
 interface ProgressProps {
@@ -34,11 +26,11 @@ export function JobProgressBar({ status, progress, total }: ProgressProps) {
       : status === 'cancelled'
         ? 'text-ink-dim'
         : isActive(status)
-          ? 'text-violet'
+          ? 'text-violet-bright'
           : 'text-neon';
   return (
     <span
-      className={['font-mono text-xs', tint].join(' ')}
+      className={['font-mono text-xs tabular-nums', tint].join(' ')}
       role="progressbar"
       aria-valuenow={pct}
       aria-valuemin={0}

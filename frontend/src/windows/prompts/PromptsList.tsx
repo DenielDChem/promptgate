@@ -7,6 +7,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { moduleAccess } from '@/lib/rbac';
 import { PixelButton } from '@/components/PixelButton';
 import { StatusBadge } from '@/components/StatusBadge';
+import { ModuleHeader } from '@/components/ModuleHeader';
+import { Th, interactiveRowProps } from '@/components/DataTable';
 
 export function PromptsList() {
   const role = useAuthStore((s) => s.user?.role ?? 'guest');
@@ -35,11 +37,7 @@ export function PromptsList() {
   return (
     <div className="flex h-full flex-col gap-2">
       {/* Toolbar */}
-      <div className="flex shrink-0 items-center gap-2">
-        <h2 className="font-mono text-sm uppercase tracking-widest text-neon-dim">
-          My Prompts
-        </h2>
-        <span className="font-mono text-[11px] text-ink-dim">({list.length})</span>
+      <ModuleHeader title="My Prompts" count={list.length}>
         <div className="ml-auto flex items-center gap-2">
           <PixelButton onClick={() => void loadList()} aria-label="Refresh list">
             ↻
@@ -50,7 +48,7 @@ export function PromptsList() {
             </PixelButton>
           )}
         </div>
-      </div>
+      </ModuleHeader>
 
       {error && (
         <p
@@ -85,12 +83,7 @@ export function PromptsList() {
               {list.map((p) => (
                 <tr
                   key={p.id}
-                  tabIndex={0}
-                  onClick={() => void openEditor(p.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') void openEditor(p.id);
-                  }}
-                  className="cursor-pointer border-b border-border text-ink hover:bg-violet/15 focus:bg-violet/20 focus:outline-none"
+                  {...interactiveRowProps(`Open prompt ${p.name}`, () => void openEditor(p.id))}
                 >
                   <td className="px-2 py-1.5">
                     <span className="pixel-inset rounded-pixel bg-bg px-1.5 py-0.5 text-neon-dim">
@@ -103,7 +96,7 @@ export function PromptsList() {
                       {p.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="rounded-pixel bg-card px-1 py-px text-[10px] text-violet"
+                          className="rounded-pixel bg-card px-1 py-px text-[10px] text-violet-bright"
                         >
                           {tag}
                         </span>
@@ -135,10 +128,6 @@ export function PromptsList() {
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="px-2 py-1.5 text-left font-normal">{children}</th>;
-}
-
 function EmptyState({
   readOnly,
   onNew,
@@ -148,7 +137,7 @@ function EmptyState({
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-      <span className="text-4xl text-violet" aria-hidden>
+      <span className="text-4xl text-violet-bright" aria-hidden>
         ▤
       </span>
       <p className="font-mono text-xs text-ink-dim">

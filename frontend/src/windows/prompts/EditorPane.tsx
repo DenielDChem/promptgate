@@ -88,7 +88,11 @@ export function EditorPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-1">
-      <div className="min-h-0 flex-1 overflow-hidden pixel-inset rounded-pixel">
+      <div
+        role="group"
+        aria-label="Prompt template editor"
+        className="min-h-0 flex-1 overflow-hidden pixel-inset rounded-pixel"
+      >
         <Editor
           height="100%"
           defaultLanguage="handlebars"
@@ -103,6 +107,7 @@ export function EditorPane({
           }
           options={{
             readOnly,
+            ariaLabel: 'Prompt template editor',
             fontFamily:
               "'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace",
             fontSize: 13,
@@ -133,7 +138,12 @@ function ProblemsStrip({
 }) {
   return (
     <div className="shrink-0 pixel-inset rounded-pixel bg-bg">
-      <div className="flex items-center gap-2 border-b border-border px-2 py-1">
+      <div
+        role="status"
+        aria-live="polite"
+        aria-label={linting ? 'Linting…' : `${findings.length} problems detected`}
+        className="flex items-center gap-2 border-b border-border px-2 py-1"
+      >
         <span className="font-mono text-[10px] uppercase tracking-widest text-ink-dim">
           Problems
         </span>

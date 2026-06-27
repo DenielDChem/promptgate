@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
+import { setUnauthorizedHandler } from '@/api/client';
+import { toast } from '@/stores/toastStore';
 import { AuthGate } from '@/windows/AuthGate';
 import { Desktop } from '@/desktop/Desktop';
 
@@ -12,6 +14,17 @@ export function App() {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  // Tear down a lapsed session globally: any authenticated 401 logs out + warns.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      if (useAuthStore.getState().status === 'authenticated') {
+        toast.error('Session expired — please log in again.');
+      }
+      void useAuthStore.getState().logout();
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   if (status === 'booting') {
     return (
