@@ -553,8 +553,18 @@ def make_app(db_path: str | Path = _DEFAULT_DB_PATH, start_worker: bool = False)
         """Redirect root to the web UI."""
         return RedirectResponse("/ui/")
 
-    _ui_dir = Path(__file__).parent / "ui"
-    if _ui_dir.is_dir():
+    # Prefer the React platform SPA build (repo: frontend/dist, or a copy
+    # bundled into the package), falling back to the legacy single-page UI.
+    # The SPA uses hash routing, so html=True (serve index.html at the mount
+    # root) is sufficient — no path-based catch-all needed.
+    _pkg_dir = Path(__file__).resolve().parent
+    _ui_candidates = (
+        _pkg_dir.parent / "frontend" / "dist",  # repo checkout / editable install
+        _pkg_dir / "static",  # future wheel-bundled SPA
+        _pkg_dir / "ui",  # legacy single-page UI
+    )
+    _ui_dir = next((d for d in _ui_candidates if d.is_dir()), None)
+    if _ui_dir is not None:
         app.mount("/ui", StaticFiles(directory=_ui_dir, html=True), name="ui")
 
     return app
