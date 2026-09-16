@@ -17,3 +17,5 @@ logs/
 # tooling / session scratch (claude-flow, agent worktrees)
 .claude-flow/
 .claude/worktrees/
+.coverage
+.venv/
